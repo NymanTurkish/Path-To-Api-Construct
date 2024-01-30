@@ -41,7 +41,7 @@ interface domainConfig {
 
 interface apiProps {
   apiFolderPath: string;
-  clientHostUrl: string;
+  clientHostUrl?: string;
   environment?: { [key: string]: string },
   domainConfig?: domainConfig;
 };
@@ -49,11 +49,13 @@ interface apiProps {
 export class CustomAPI extends Construct {
   authorizer: apigateway.RequestAuthorizer;
   environment?: { [key: string]: string };
+  clientHostUrl?: string;
   adminRole: iam.Role;
 
   constructor(scope: Construct, id: string, props: apiProps) {
     super(scope, id);
     this.environment = props.environment;
+    this.clientHostUrl = props.clientHostUrl ?? '*';
 
     this.adminRole = new iam.Role(this, 'AdminRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -75,7 +77,7 @@ export class CustomAPI extends Construct {
     const api = new apigateway.RestApi(this, 'ApplicationPortalAPI', {
       domainName,
       defaultCorsPreflightOptions: {
-        allowOrigins: [props.clientHostUrl],
+        allowOrigins: [this.clientHostUrl],
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: [
           'Accept',
@@ -93,7 +95,7 @@ export class CustomAPI extends Construct {
       type: apigateway.ResponseType.ACCESS_DENIED,
       statusCode: '403',
       responseHeaders: {
-        'Access-Control-Allow-Origin': `'${props.clientHostUrl}'`,
+        'Access-Control-Allow-Origin': `'${this.clientHostUrl}'`,
         'Access-Control-Allow-Credentials': '\'true\''
       },
       templates: {
@@ -105,7 +107,7 @@ export class CustomAPI extends Construct {
       type: apigateway.ResponseType.ACCESS_DENIED,
       statusCode: '401',
       responseHeaders: {
-        'Access-Control-Allow-Origin': `'${props.clientHostUrl}'`,
+        'Access-Control-Allow-Origin': `'${this.clientHostUrl}'`,
         'Access-Control-Allow-Credentials': '\'true\''
       },
       templates: {
@@ -117,7 +119,7 @@ export class CustomAPI extends Construct {
       type: apigateway.ResponseType.DEFAULT_5XX,
       statusCode: '500',
       responseHeaders: {
-        'Access-Control-Allow-Origin': `'${props.clientHostUrl}'`,
+        'Access-Control-Allow-Origin': `'${this.clientHostUrl}'`,
         'Access-Control-Allow-Credentials': '\'true\''
       },
       templates: {
@@ -137,7 +139,7 @@ export class CustomAPI extends Construct {
 
     const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, 'ApplicationPortalLambdaAuthorizer', {
       runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(__dirname, `${props.apiFolderPath}/authorizer.ts`),
+      entry: `${props.apiFolderPath}/authorizer.ts`,
       functionName: `${cdk.Stack.of(this).stackName}-authorizer`,
       logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
       environment: this.environment,
@@ -186,7 +188,7 @@ export class CustomAPI extends Construct {
       };
     }
   
-    traverse(path.join(__dirname, props.apiFolderPath), routes);
+    traverse(props.apiFolderPath, routes);
   }
 
   addMethod = async (type: string, resource: apigateway.IResource, pathToMethod: string, config: any, entry: string) => {
