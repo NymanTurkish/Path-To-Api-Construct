@@ -10,16 +10,21 @@ export interface methodConfig {
         };
     };
 }
+interface domainConfig {
+    name: string;
+    certificate: cdk.aws_certificatemanager.Certificate;
+}
 interface apiProps {
     apiFolderPath: string;
-    environment: {
+    clientHostUrl: string;
+    environment?: {
         [key: string]: string;
     };
-    certificate: cdk.aws_certificatemanager.Certificate | undefined;
+    domainConfig?: domainConfig;
 }
 export declare class CustomAPI extends Construct {
     authorizer: apigateway.RequestAuthorizer;
-    environment: {
+    environment?: {
         [key: string]: string;
     };
     adminRole: iam.Role;

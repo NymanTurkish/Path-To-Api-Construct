@@ -34,15 +34,21 @@ interface apiRoute {
   resource: apigateway.IResource
 };
 
+interface domainConfig {
+  name: string;
+  certificate: cdk.aws_certificatemanager.Certificate;
+}
+
 interface apiProps {
   apiFolderPath: string;
-  environment: { [key: string]: string },
-  certificate: cdk.aws_certificatemanager.Certificate | undefined;
+  clientHostUrl: string;
+  environment?: { [key: string]: string },
+  domainConfig?: domainConfig;
 };
 
 export class CustomAPI extends Construct {
   authorizer: apigateway.RequestAuthorizer;
-  environment: { [key: string]: string };
+  environment?: { [key: string]: string };
   adminRole: iam.Role;
 
   constructor(scope: Construct, id: string, props: apiProps) {
@@ -57,10 +63,10 @@ export class CustomAPI extends Construct {
     });
 
     let domainName = undefined;
-    if (this.environment.ENV !== 'local') {
+    if (props.domainConfig) {
       domainName = {
-        domainName: `api.${this.environment.DOMAIN}`,
-        certificate: props.certificate!,
+        domainName: `api.${props.domainConfig.name}`,
+        certificate: props.domainConfig.certificate,
         endpointType: apigateway.EndpointType.EDGE,
         securityPolicy: apigateway.SecurityPolicy.TLS_1_2
       }
@@ -69,7 +75,7 @@ export class CustomAPI extends Construct {
     const api = new apigateway.RestApi(this, 'ApplicationPortalAPI', {
       domainName,
       defaultCorsPreflightOptions: {
-        allowOrigins: [this.environment.CLIENT_HOST_URL],
+        allowOrigins: [props.clientHostUrl],
         allowMethods: apigateway.Cors.ALL_METHODS,
         allowHeaders: [
           'Accept',
@@ -87,7 +93,7 @@ export class CustomAPI extends Construct {
       type: apigateway.ResponseType.ACCESS_DENIED,
       statusCode: '403',
       responseHeaders: {
-        'Access-Control-Allow-Origin': `'${this.environment.CLIENT_HOST_URL}'`,
+        'Access-Control-Allow-Origin': `'${props.clientHostUrl}'`,
         'Access-Control-Allow-Credentials': '\'true\''
       },
       templates: {
@@ -99,7 +105,7 @@ export class CustomAPI extends Construct {
       type: apigateway.ResponseType.ACCESS_DENIED,
       statusCode: '401',
       responseHeaders: {
-        'Access-Control-Allow-Origin': `'${this.environment.CLIENT_HOST_URL}'`,
+        'Access-Control-Allow-Origin': `'${props.clientHostUrl}'`,
         'Access-Control-Allow-Credentials': '\'true\''
       },
       templates: {
@@ -111,7 +117,7 @@ export class CustomAPI extends Construct {
       type: apigateway.ResponseType.DEFAULT_5XX,
       statusCode: '500',
       responseHeaders: {
-        'Access-Control-Allow-Origin': `'${this.environment.CLIENT_HOST_URL}'`,
+        'Access-Control-Allow-Origin': `'${props.clientHostUrl}'`,
         'Access-Control-Allow-Credentials': '\'true\''
       },
       templates: {
@@ -119,12 +125,12 @@ export class CustomAPI extends Construct {
       }
     });
 
-    if (this.environment.ENV !== 'local') {
-      const zone = route53.HostedZone.fromLookup(this, 'ApplicationPortalDomainZone', { domainName: this.environment.DOMAIN });
+    if (props.domainConfig) {
+      const zone = route53.HostedZone.fromLookup(this, 'ApplicationPortalDomainZone', { domainName: props.domainConfig.name });
 
       new route53.ARecord(this, 'ApplicationPortalAPIRecord', {
         zone: zone,
-        recordName: `api.${this.environment.DOMAIN}`,
+        recordName: `api.${props.domainConfig.name}`,
         target: route53.RecordTarget.fromAlias(new targets.ApiGateway(api)),
       });
     }
@@ -139,7 +145,7 @@ export class CustomAPI extends Construct {
     this.authorizer = new apigateway.RequestAuthorizer(this, 'ApplicationPortalAuthorizer', {
       handler: lambdaAuthorizer,
       identitySources: [apigateway.IdentitySource.header('Authorization')],
-      resultsCacheTtl: this.environment.ENV === 'local' ? cdk.Duration.seconds(0) : undefined
+      resultsCacheTtl: cdk.Duration.seconds(0)
     });
     this.authorizer._attachToApi(api);
     
