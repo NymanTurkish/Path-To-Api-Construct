@@ -1,0 +1,21 @@
+{
+  "name": "path-to-api-construct",
+  "version": "0.1.0",
+  "description": "",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "author": "Nyman Turkish",
+  "license": "ISC",
+  "dependencies": {
+    "aws-cdk-lib": "^2.124.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NymanTurkish/Path-To-Api-Construct"
+  }
+}
