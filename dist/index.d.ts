@@ -16,7 +16,7 @@ interface domainConfig {
 }
 interface apiProps {
     apiFolderPath: string;
-    clientHostUrl: string;
+    clientHostUrl?: string;
     environment?: {
         [key: string]: string;
     };
@@ -27,6 +27,7 @@ export declare class CustomAPI extends Construct {
     environment?: {
         [key: string]: string;
     };
+    clientHostUrl?: string;
     adminRole: iam.Role;
     constructor(scope: Construct, id: string, props: apiProps);
     addMethod: (type: string, resource: apigateway.IResource, pathToMethod: string, config: any, entry: string) => Promise<void>;
