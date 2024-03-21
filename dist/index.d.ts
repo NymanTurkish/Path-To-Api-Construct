@@ -15,12 +15,14 @@ interface domainConfig {
     certificate: cdk.aws_certificatemanager.Certificate;
 }
 interface apiProps {
+    apiName: string;
     apiFolderPath: string;
     clientHostUrl?: string;
     environment?: {
         [key: string]: string;
     };
     domainConfig?: domainConfig;
+    deployOptions?: apigateway.RestApiProps;
 }
 export declare class CustomAPI extends Construct {
     authorizer: apigateway.RequestAuthorizer;
