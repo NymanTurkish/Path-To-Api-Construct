@@ -35,6 +35,7 @@ interface apiRoute {
 };
 
 interface domainConfig {
+  baseName?: string; // Used when base domain already exists, and name is a subdomain. Otherwise leave empty.
   name: string;
   certificate: cdk.aws_certificatemanager.Certificate;
 }
@@ -133,7 +134,7 @@ export class CustomAPI extends Construct {
     });
 
     if (props.domainConfig) {
-      const zone = route53.HostedZone.fromLookup(this, `${props.apiName}DomainZone`, { domainName: props.domainConfig.name });
+      const zone = route53.HostedZone.fromLookup(this, `${props.apiName}DomainZone`, { domainName: props.domainConfig.baseName ?? props.domainConfig.name });
 
       new route53.ARecord(this, `${props.apiName}APIRecord`, {
         zone: zone,
