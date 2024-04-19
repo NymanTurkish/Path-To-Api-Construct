@@ -11,6 +11,7 @@ export interface methodConfig {
     };
 }
 interface domainConfig {
+    baseName?: string;
     name: string;
     certificate: cdk.aws_certificatemanager.Certificate;
 }

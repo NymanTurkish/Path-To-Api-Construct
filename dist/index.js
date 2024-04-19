@@ -57,7 +57,7 @@ const HttpMethod = {
 ;
 class CustomAPI extends constructs_1.Construct {
     constructor(scope, id, props) {
-        var _a, _b;
+        var _a, _b, _c;
         super(scope, id);
         this.addMethod = (type, resource, pathToMethod, config, entry) => __awaiter(this, void 0, void 0, function* () {
             const name = (entry + type).replace(/{|}/g, '_');
@@ -165,7 +165,7 @@ class CustomAPI extends constructs_1.Construct {
             }
         });
         if (props.domainConfig) {
-            const zone = route53.HostedZone.fromLookup(this, `${props.apiName}DomainZone`, { domainName: props.domainConfig.name });
+            const zone = route53.HostedZone.fromLookup(this, `${props.apiName}DomainZone`, { domainName: (_c = props.domainConfig.baseName) !== null && _c !== void 0 ? _c : props.domainConfig.name });
             new route53.ARecord(this, `${props.apiName}APIRecord`, {
                 zone: zone,
                 recordName: `api.${props.domainConfig.name}`,
