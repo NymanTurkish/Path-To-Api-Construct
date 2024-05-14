@@ -35,15 +35,18 @@ interface apiRoute {
 };
 
 interface domainConfig {
+  baseName?: string; // Used when base domain already exists, and name is a subdomain. Otherwise leave empty.
   name: string;
   certificate: cdk.aws_certificatemanager.Certificate;
 }
 
 interface apiProps {
+  apiName: string;
   apiFolderPath: string;
   clientHostUrl?: string;
   environment?: { [key: string]: string },
-  domainConfig?: domainConfig;
+  domainConfig?: domainConfig
+  deployOptions?: apigateway.RestApiProps;
 };
 
 export class CustomAPI extends Construct {
@@ -74,7 +77,9 @@ export class CustomAPI extends Construct {
       }
     }
 
-    const api = new apigateway.RestApi(this, 'ApplicationPortalAPI', {
+    const gatewayOptions = props.deployOptions ?? {};
+
+    const api = new apigateway.RestApi(this, `${props.apiName}API`, {
       domainName,
       defaultCorsPreflightOptions: {
         allowOrigins: [this.clientHostUrl],
@@ -88,7 +93,8 @@ export class CustomAPI extends Construct {
           'Content-Type',
           'Salesforce-Instance-Url'
         ]
-      }
+      },
+      ...gatewayOptions
     });
 
     api.addGatewayResponse('ForbiddenResponse', {
@@ -128,23 +134,23 @@ export class CustomAPI extends Construct {
     });
 
     if (props.domainConfig) {
-      const zone = route53.HostedZone.fromLookup(this, 'ApplicationPortalDomainZone', { domainName: props.domainConfig.name });
+      const zone = route53.HostedZone.fromLookup(this, `${props.apiName}DomainZone`, { domainName: props.domainConfig.baseName ?? props.domainConfig.name });
 
-      new route53.ARecord(this, 'ApplicationPortalAPIRecord', {
+      new route53.ARecord(this, `${props.apiName}APIRecord`, {
         zone: zone,
         recordName: `api.${props.domainConfig.name}`,
         target: route53.RecordTarget.fromAlias(new targets.ApiGateway(api)),
       });
     }
 
-    const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, 'ApplicationPortalLambdaAuthorizer', {
+    const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, `${props.apiName}LambdaAuthorizer`, {
       runtime: lambda.Runtime.NODEJS_18_X,
       entry: `${props.apiFolderPath}/authorizer.ts`,
       functionName: `${cdk.Stack.of(this).stackName}-authorizer`,
       logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
       environment: this.environment,
     });
-    this.authorizer = new apigateway.RequestAuthorizer(this, 'ApplicationPortalAuthorizer', {
+    this.authorizer = new apigateway.RequestAuthorizer(this, `${props.apiName}Authorizer`, {
       handler: lambdaAuthorizer,
       identitySources: [apigateway.IdentitySource.header('Authorization')],
       resultsCacheTtl: cdk.Duration.seconds(0)
