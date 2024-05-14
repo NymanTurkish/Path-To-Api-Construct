@@ -57,7 +57,7 @@ const HttpMethod = {
 ;
 class CustomAPI extends constructs_1.Construct {
     constructor(scope, id, props) {
-        var _a;
+        var _a, _b;
         super(scope, id);
         this.addMethod = (type, resource, pathToMethod, config, entry) => __awaiter(this, void 0, void 0, function* () {
             const name = (entry + type).replace(/{|}/g, '_');
@@ -117,9 +117,8 @@ class CustomAPI extends constructs_1.Construct {
                 securityPolicy: apigateway.SecurityPolicy.TLS_1_2
             };
         }
-        const api = new apigateway.RestApi(this, 'ApplicationPortalAPI', {
-            domainName,
-            defaultCorsPreflightOptions: {
+        const gatewayOptions = (_b = props.deployOptions) !== null && _b !== void 0 ? _b : {};
+        const api = new apigateway.RestApi(this, `${props.apiName}API`, Object.assign({ domainName, defaultCorsPreflightOptions: {
                 allowOrigins: [this.clientHostUrl],
                 allowMethods: apigateway.Cors.ALL_METHODS,
                 allowHeaders: [
@@ -131,8 +130,7 @@ class CustomAPI extends constructs_1.Construct {
                     'Content-Type',
                     'Salesforce-Instance-Url'
                 ]
-            }
-        });
+            } }, gatewayOptions));
         api.addGatewayResponse('ForbiddenResponse', {
             type: apigateway.ResponseType.ACCESS_DENIED,
             statusCode: '403',
@@ -167,21 +165,21 @@ class CustomAPI extends constructs_1.Construct {
             }
         });
         if (props.domainConfig) {
-            const zone = route53.HostedZone.fromLookup(this, 'ApplicationPortalDomainZone', { domainName: props.domainConfig.name });
-            new route53.ARecord(this, 'ApplicationPortalAPIRecord', {
+            const zone = route53.HostedZone.fromLookup(this, `${props.apiName}DomainZone`, { domainName: props.domainConfig.name });
+            new route53.ARecord(this, `${props.apiName}APIRecord`, {
                 zone: zone,
                 recordName: `api.${props.domainConfig.name}`,
                 target: route53.RecordTarget.fromAlias(new targets.ApiGateway(api)),
             });
         }
-        const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, 'ApplicationPortalLambdaAuthorizer', {
+        const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, `${props.apiName}LambdaAuthorizer`, {
             runtime: lambda.Runtime.NODEJS_18_X,
             entry: `${props.apiFolderPath}/authorizer.ts`,
             functionName: `${cdk.Stack.of(this).stackName}-authorizer`,
             logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
             environment: this.environment,
         });
-        this.authorizer = new apigateway.RequestAuthorizer(this, 'ApplicationPortalAuthorizer', {
+        this.authorizer = new apigateway.RequestAuthorizer(this, `${props.apiName}Authorizer`, {
             handler: lambdaAuthorizer,
             identitySources: [apigateway.IdentitySource.header('Authorization')],
             resultsCacheTtl: cdk.Duration.seconds(0)
