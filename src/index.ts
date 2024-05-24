@@ -19,10 +19,13 @@ const HttpMethod = {
   HEAD: 'HEAD',
 };
 
+const defaultAuthorizer = 'default-authorizer';
+
 export interface methodConfig {
   methods: {
     [method: string]: {
       authRequired: boolean;
+      authorizer?: string;
       model: any;
     };
   };
@@ -50,7 +53,7 @@ interface apiProps {
 };
 
 export class CustomAPI extends Construct {
-  authorizer: apigateway.RequestAuthorizer;
+  authorizers: { [key: string]: apigateway.RequestAuthorizer } = {};
   environment?: { [key: string]: string };
   clientHostUrl?: string;
   adminRole: iam.Role;
@@ -142,20 +145,6 @@ export class CustomAPI extends Construct {
         target: route53.RecordTarget.fromAlias(new targets.ApiGateway(api)),
       });
     }
-
-    const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, `${props.apiName}LambdaAuthorizer`, {
-      runtime: lambda.Runtime.NODEJS_18_X,
-      entry: `${props.apiFolderPath}/authorizer.ts`,
-      functionName: `${cdk.Stack.of(this).stackName}-authorizer`,
-      logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
-      environment: this.environment,
-    });
-    this.authorizer = new apigateway.RequestAuthorizer(this, `${props.apiName}Authorizer`, {
-      handler: lambdaAuthorizer,
-      identitySources: [apigateway.IdentitySource.header('Authorization')],
-      resultsCacheTtl: cdk.Duration.seconds(0)
-    });
-    this.authorizer._attachToApi(api);
     
     const routes: apiRoute = {
       routes: {},
@@ -184,7 +173,7 @@ export class CustomAPI extends Construct {
 
             if (config.methods) {
               for(const method in config.methods) {
-                currentNode.routes[entry].methods[method] = this.addMethod(method, resource, fullPath, config.methods[method], entry);
+                currentNode.routes[entry].methods[method] = this.addMethod(method, resource, fullPath, config.methods[method], entry, props);
               }
             }
           }
@@ -197,7 +186,7 @@ export class CustomAPI extends Construct {
     traverse(props.apiFolderPath, routes);
   }
 
-  addMethod = async (type: string, resource: apigateway.IResource, pathToMethod: string, config: any, entry: string) => {
+  addMethod = async (type: string, resource: apigateway.IResource, pathToMethod: string, config: any, entry: string, props: apiProps) => {
     const name = (entry + type).replace(/{|}/g, '_');
 
     const method = new nodejsLambda.NodejsFunction(this, `${name}Function`, {
@@ -233,6 +222,32 @@ export class CustomAPI extends Construct {
       }
     }
 
+    let authorizer = undefined;
+    const authorizerName = config.authorizer || defaultAuthorizer;
+
+    if (this.authorizers[authorizerName]) {
+      authorizer = this.authorizers[authorizerName]
+    } else {
+      if (!fs.existsSync(`${props.apiFolderPath}/${authorizerName}.ts`)) {
+        throw new Error(`Authorizer ${authorizerName} not found in ${props.apiFolderPath}`);
+      }
+
+      const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, `${props.apiName}Lambda${authorizerName}`, {
+        runtime: lambda.Runtime.NODEJS_18_X,
+        entry: `${props.apiFolderPath}/${authorizerName}.ts`,
+        functionName: `${cdk.Stack.of(this).stackName}-${authorizerName}`,
+        logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
+        environment: this.environment,
+      });
+      authorizer = new apigateway.RequestAuthorizer(this, `${props.apiName}${authorizerName}`, {
+        handler: lambdaAuthorizer,
+        identitySources: [apigateway.IdentitySource.header('Authorization')],
+        resultsCacheTtl: cdk.Duration.seconds(0)
+      });
+      authorizer._attachToApi(resource.api);
+      this.authorizers[authorizerName] = authorizer;
+    } 
+
     resource.addMethod(type, new apigateway.LambdaIntegration(method), {
       requestValidatorOptions: {
         validateRequestBody: type === 'POST',
@@ -240,7 +255,7 @@ export class CustomAPI extends Construct {
       },
       requestModels,
       requestParameters,
-      authorizer: config.authRequired ? this.authorizer : undefined
+      authorizer: config.authRequired ? authorizer : undefined
     });
   }
 
