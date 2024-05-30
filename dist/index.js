@@ -52,24 +52,18 @@ const HttpMethod = {
     OPTIONS: 'OPTIONS',
     HEAD: 'HEAD',
 };
+const defaultAuthorizer = 'default-authorizer';
 ;
 ;
 ;
 class CustomAPI extends constructs_1.Construct {
     constructor(scope, id, props) {
-        var _a, _b, _c;
+        var _a, _b, _c, _d, _e;
         super(scope, id);
-        this.addMethod = (type, resource, pathToMethod, config, entry) => __awaiter(this, void 0, void 0, function* () {
+        this.authorizers = {};
+        this.addMethod = (type, resource, pathToMethod, config, entry, props) => __awaiter(this, void 0, void 0, function* () {
             const name = (entry + type).replace(/{|}/g, '_');
-            const method = new nodejsLambda.NodejsFunction(this, `${name}Function`, {
-                runtime: lambda.Runtime.NODEJS_18_X,
-                entry: path.join(pathToMethod, `${type.toLowerCase()}.ts`),
-                environment: this.environment,
-                role: this.adminRole,
-                logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
-                functionName: `${cdk.Stack.of(this).stackName}-${name}`,
-                timeout: cdk.Duration.seconds(30)
-            });
+            const method = new nodejsLambda.NodejsFunction(this, `${name}Function`, Object.assign({ runtime: lambda.Runtime.NODEJS_18_X, entry: path.join(pathToMethod, `${type.toLowerCase()}.ts`), environment: this.environment, role: this.adminRole, logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH, functionName: `${cdk.Stack.of(this).stackName}-${name}`, timeout: cdk.Duration.seconds(30), memorySize: this.lambdaMemorySize }, config.functionProps));
             let requestModels, requestParameters;
             if (config.model) {
                 switch (type) {
@@ -87,6 +81,31 @@ class CustomAPI extends constructs_1.Construct {
                         break;
                 }
             }
+            let authorizer = undefined;
+            const authorizerName = config.authorizer || defaultAuthorizer;
+            if (this.authorizers[authorizerName]) {
+                authorizer = this.authorizers[authorizerName];
+            }
+            else {
+                if (!fs.existsSync(`${props.apiFolderPath}/${authorizerName}.ts`)) {
+                    throw new Error(`Authorizer ${authorizerName} not found in ${props.apiFolderPath}`);
+                }
+                const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, `${props.apiName}Lambda${authorizerName}`, {
+                    runtime: lambda.Runtime.NODEJS_18_X,
+                    entry: `${props.apiFolderPath}/${authorizerName}.ts`,
+                    functionName: `${cdk.Stack.of(this).stackName}-${authorizerName}`,
+                    logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
+                    environment: this.environment,
+                    memorySize: this.authorizerMemorySize,
+                });
+                authorizer = new apigateway.RequestAuthorizer(this, `${props.apiName}${authorizerName}`, {
+                    handler: lambdaAuthorizer,
+                    identitySources: [apigateway.IdentitySource.header('Authorization')],
+                    resultsCacheTtl: cdk.Duration.seconds(0)
+                });
+                authorizer._attachToApi(resource.api);
+                this.authorizers[authorizerName] = authorizer;
+            }
             resource.addMethod(type, new apigateway.LambdaIntegration(method), {
                 requestValidatorOptions: {
                     validateRequestBody: type === 'POST',
@@ -94,7 +113,7 @@ class CustomAPI extends constructs_1.Construct {
                 },
                 requestModels,
                 requestParameters,
-                authorizer: config.authRequired ? this.authorizer : undefined
+                authorizer: config.authRequired ? authorizer : undefined
             });
         });
         this.pathToCamelCase = (path) => {
@@ -102,6 +121,8 @@ class CustomAPI extends constructs_1.Construct {
         };
         this.environment = props.environment;
         this.clientHostUrl = (_a = props.clientHostUrl) !== null && _a !== void 0 ? _a : '*';
+        this.lambdaMemorySize = (_b = props.lambdaMemorySize) !== null && _b !== void 0 ? _b : 128;
+        this.authorizerMemorySize = (_c = props.authorizerMemorySize) !== null && _c !== void 0 ? _c : 128;
         this.adminRole = new iam.Role(this, 'AdminRole', {
             assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
             managedPolicies: [
@@ -117,7 +138,7 @@ class CustomAPI extends constructs_1.Construct {
                 securityPolicy: apigateway.SecurityPolicy.TLS_1_2
             };
         }
-        const gatewayOptions = (_b = props.deployOptions) !== null && _b !== void 0 ? _b : {};
+        const gatewayOptions = (_d = props.deployOptions) !== null && _d !== void 0 ? _d : {};
         const api = new apigateway.RestApi(this, `${props.apiName}API`, Object.assign({ domainName, defaultCorsPreflightOptions: {
                 allowOrigins: [this.clientHostUrl],
                 allowMethods: apigateway.Cors.ALL_METHODS,
@@ -165,26 +186,13 @@ class CustomAPI extends constructs_1.Construct {
             }
         });
         if (props.domainConfig) {
-            const zone = route53.HostedZone.fromLookup(this, `${props.apiName}DomainZone`, { domainName: (_c = props.domainConfig.baseName) !== null && _c !== void 0 ? _c : props.domainConfig.name });
+            const zone = route53.HostedZone.fromLookup(this, `${props.apiName}DomainZone`, { domainName: (_e = props.domainConfig.baseName) !== null && _e !== void 0 ? _e : props.domainConfig.name });
             new route53.ARecord(this, `${props.apiName}APIRecord`, {
                 zone: zone,
                 recordName: `api.${props.domainConfig.name}`,
                 target: route53.RecordTarget.fromAlias(new targets.ApiGateway(api)),
             });
         }
-        const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, `${props.apiName}LambdaAuthorizer`, {
-            runtime: lambda.Runtime.NODEJS_18_X,
-            entry: `${props.apiFolderPath}/authorizer.ts`,
-            functionName: `${cdk.Stack.of(this).stackName}-authorizer`,
-            logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
-            environment: this.environment,
-        });
-        this.authorizer = new apigateway.RequestAuthorizer(this, `${props.apiName}Authorizer`, {
-            handler: lambdaAuthorizer,
-            identitySources: [apigateway.IdentitySource.header('Authorization')],
-            resultsCacheTtl: cdk.Duration.seconds(0)
-        });
-        this.authorizer._attachToApi(api);
         const routes = {
             routes: {},
             methods: {},
@@ -207,7 +215,7 @@ class CustomAPI extends constructs_1.Construct {
                         const { config } = yield Promise.resolve(`${configPath}`).then(s => __importStar(require(s)));
                         if (config.methods) {
                             for (const method in config.methods) {
-                                currentNode.routes[entry].methods[method] = this.addMethod(method, resource, fullPath, config.methods[method], entry);
+                                currentNode.routes[entry].methods[method] = this.addMethod(method, resource, fullPath, config.methods[method], entry, props);
                             }
                         }
                     }

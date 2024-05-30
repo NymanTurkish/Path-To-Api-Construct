@@ -50,6 +50,8 @@ interface apiProps {
   environment?: { [key: string]: string },
   domainConfig?: domainConfig
   deployOptions?: apigateway.RestApiProps;
+  lambdaMemorySize?: number;
+  authorizerMemorySize?: number;
 };
 
 export class CustomAPI extends Construct {
@@ -57,11 +59,15 @@ export class CustomAPI extends Construct {
   environment?: { [key: string]: string };
   clientHostUrl?: string;
   adminRole: iam.Role;
+  lambdaMemorySize: number;
+  authorizerMemorySize: number;
 
   constructor(scope: Construct, id: string, props: apiProps) {
     super(scope, id);
     this.environment = props.environment;
     this.clientHostUrl = props.clientHostUrl ?? '*';
+    this.lambdaMemorySize = props.lambdaMemorySize ?? 128;
+    this.authorizerMemorySize = props.authorizerMemorySize ?? 128;
 
     this.adminRole = new iam.Role(this, 'AdminRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -196,7 +202,9 @@ export class CustomAPI extends Construct {
       role: this.adminRole,
       logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
       functionName: `${cdk.Stack.of(this).stackName}-${name}`,
-      timeout: cdk.Duration.seconds(30)
+      timeout: cdk.Duration.seconds(30),
+      memorySize: this.lambdaMemorySize,
+      ...config.functionProps
     });
 
     let requestModels, requestParameters;
@@ -238,6 +246,7 @@ export class CustomAPI extends Construct {
         functionName: `${cdk.Stack.of(this).stackName}-${authorizerName}`,
         logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
         environment: this.environment,
+        memorySize: this.authorizerMemorySize,
       });
       authorizer = new apigateway.RequestAuthorizer(this, `${props.apiName}${authorizerName}`, {
         handler: lambdaAuthorizer,
