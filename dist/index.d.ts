@@ -6,6 +6,7 @@ export interface methodConfig {
     methods: {
         [method: string]: {
             authRequired: boolean;
+            authorizer?: string;
             model: any;
         };
     };
@@ -24,16 +25,22 @@ interface apiProps {
     };
     domainConfig?: domainConfig;
     deployOptions?: apigateway.RestApiProps;
+    lambdaMemorySize?: number;
+    authorizerMemorySize?: number;
 }
 export declare class CustomAPI extends Construct {
-    authorizer: apigateway.RequestAuthorizer;
+    authorizers: {
+        [key: string]: apigateway.RequestAuthorizer;
+    };
     environment?: {
         [key: string]: string;
     };
     clientHostUrl?: string;
     adminRole: iam.Role;
+    lambdaMemorySize: number;
+    authorizerMemorySize: number;
     constructor(scope: Construct, id: string, props: apiProps);
-    addMethod: (type: string, resource: apigateway.IResource, pathToMethod: string, config: any, entry: string) => Promise<void>;
+    addMethod: (type: string, resource: apigateway.IResource, pathToMethod: string, config: any, entry: string, props: apiProps) => Promise<void>;
     pathToCamelCase: (path: string) => string;
 }
 export {};
