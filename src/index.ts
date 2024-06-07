@@ -56,11 +56,16 @@ interface apiProps {
 
 export class CustomAPI extends Construct {
   authorizers: { [key: string]: apigateway.RequestAuthorizer } = {};
+  lambdas: { [key: string]: lambda.Function } = {};
   environment?: { [key: string]: string };
   clientHostUrl?: string;
   adminRole: iam.Role;
   lambdaMemorySize: number;
   authorizerMemorySize: number;
+  apiGateway: cdk.aws_apigateway.RestApi;
+  lambdasReady: Promise<void>;
+
+  private lambdasReadyResolve: () => void;
 
   constructor(scope: Construct, id: string, props: apiProps) {
     super(scope, id);
@@ -68,6 +73,10 @@ export class CustomAPI extends Construct {
     this.clientHostUrl = props.clientHostUrl ?? '*';
     this.lambdaMemorySize = props.lambdaMemorySize ?? 128;
     this.authorizerMemorySize = props.authorizerMemorySize ?? 128;
+
+    this.lambdasReady = new Promise<void>((resolve) => {
+      this.lambdasReadyResolve = resolve;
+    });
 
     this.adminRole = new iam.Role(this, 'AdminRole', {
       assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -142,6 +151,8 @@ export class CustomAPI extends Construct {
       }
     });
 
+    this.apiGateway = api;
+
     if (props.domainConfig) {
       const zone = route53.HostedZone.fromLookup(this, `${props.apiName}DomainZone`, { domainName: props.domainConfig.baseName ?? props.domainConfig.name });
 
@@ -158,54 +169,59 @@ export class CustomAPI extends Construct {
       resource: api.root
     };
   
-    const traverse = async (currentPath: string, currentNode: apiRoute) => {
-      const entries = fs.readdirSync(currentPath);
-  
-      for (let i = 0; i < entries.length; i++) {
-        const entry = entries[i];
-        const fullPath = path.join(currentPath, entry);
-  
-        if (fs.statSync(fullPath).isDirectory()) {
-          const resource = currentNode.resource.addResource(entry);
-          currentNode.routes[entry] = { 
-            routes: {}, 
-            methods: {},
-            resource 
-          };
-
-          const configPath = path.join(fullPath, 'config.ts');
-          if (fs.existsSync(configPath)) {
-            const { config } = await import(configPath);
-
-            if (config.methods) {
-              for(const method in config.methods) {
-                currentNode.routes[entry].methods[method] = this.addMethod(method, resource, fullPath, config.methods[method], entry, props);
-              }
-            }
-          }
-          
-          traverse(fullPath, currentNode.routes[entry]);
-        }
-      };
-    }
-  
-    traverse(props.apiFolderPath, routes);
+    this.traverse(props.apiFolderPath, routes, props).then(() => {
+      this.lambdasReadyResolve();
+    });
   }
 
-  addMethod = async (type: string, resource: apigateway.IResource, pathToMethod: string, config: any, entry: string, props: apiProps) => {
-    const name = (entry + type).replace(/{|}/g, '_');
+  traverse = async (currentPath: string, currentNode: apiRoute, props:apiProps, parentName: string = '') => {
+    const entries = fs.readdirSync(currentPath);
 
-    const method = new nodejsLambda.NodejsFunction(this, `${name}Function`, {
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      const fullPath = path.join(currentPath, entry);
+
+      if (fs.statSync(fullPath).isDirectory()) {
+        const resource = currentNode.resource.addResource(entry);
+        const isIdRoute = entry === '{id}';
+        const routeName = isIdRoute ? `${parentName}_id` : entry;
+        currentNode.routes[entry] = { 
+          routes: {}, 
+          methods: {},
+          resource 
+        };
+
+        const configPath = path.join(fullPath, 'config.ts');
+        if (fs.existsSync(configPath)) {
+          const { config } = await import(configPath);
+
+          if (config.methods) {
+            for(const method in config.methods) {
+              const methodName = `${routeName}_${method}`;
+              currentNode.routes[entry].methods[method] = this.addMethod(method, resource, fullPath, config.methods[method], methodName, props);
+            }
+          }
+        }
+        
+        await this.traverse(fullPath, currentNode.routes[entry], props, routeName);
+      }
+    };
+  }
+
+  addMethod = async (type: string, resource: apigateway.IResource, pathToMethod: string, config: any, methodName: string, props: apiProps) => {
+    const method = new nodejsLambda.NodejsFunction(this, `${methodName}Function`, {
       runtime: lambda.Runtime.NODEJS_18_X,
       entry: path.join(pathToMethod, `${type.toLowerCase()}.ts`),
       environment: this.environment,
       role: this.adminRole,
       logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
-      functionName: `${cdk.Stack.of(this).stackName}-${name}`,
+      functionName: `${cdk.Stack.of(this).stackName}-${methodName}`,
       timeout: cdk.Duration.seconds(30),
       memorySize: this.lambdaMemorySize,
       ...config.functionProps
     });
+
+    this.lambdas[methodName] = method;
 
     let requestModels, requestParameters;
 
@@ -218,7 +234,7 @@ export class CustomAPI extends Construct {
           requestModels = {
             [config.model.contentType]: new apigateway.Model(
               this, 
-              `${name}RequestModel`, 
+              `${methodName}RequestModel`, 
               { 
                 restApi: resource.api, 
                 contentType: config.model.contentType, 
