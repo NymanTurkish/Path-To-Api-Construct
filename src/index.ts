@@ -43,7 +43,7 @@ interface domainConfig {
   certificate: cdk.aws_certificatemanager.Certificate;
 }
 
-interface apiProps {
+export interface apiProps {
   apiName: string;
   apiFolderPath: string;
   clientHostUrl?: string;

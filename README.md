@@ -4,6 +4,7 @@ You must build before making a PR!
 ## Change Log
 ### v0.5
 - Exposes the `functionProps` on `apiProps` so that you can provide additional function parameters to be applied during creation.
+- Makes `apiProps` usable.
 
 ### v0.4
 - Adds the ability to access functions that are created during call to build CustomAPI
