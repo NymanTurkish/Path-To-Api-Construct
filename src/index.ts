@@ -52,6 +52,7 @@ interface apiProps {
   deployOptions?: apigateway.RestApiProps;
   lambdaMemorySize?: number;
   authorizerMemorySize?: number;
+  functionProps?: nodejsLambda.NodejsFunctionProps;
 };
 
 export class CustomAPI extends Construct {
