@@ -92,7 +92,7 @@ class CustomAPI extends constructs_1.Construct {
             ;
         });
         this.addMethod = (type, resource, pathToMethod, config, methodName, props) => __awaiter(this, void 0, void 0, function* () {
-            const method = new nodejsLambda.NodejsFunction(this, `${methodName}Function`, Object.assign({ runtime: lambda.Runtime.NODEJS_18_X, entry: path.join(pathToMethod, `${type.toLowerCase()}.ts`), environment: this.environment, role: this.adminRole, logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH, functionName: `${cdk.Stack.of(this).stackName}-${methodName}`, timeout: cdk.Duration.seconds(30), memorySize: this.lambdaMemorySize }, config.functionProps));
+            const method = new nodejsLambda.NodejsFunction(this, `${methodName}Function`, Object.assign(Object.assign({ runtime: lambda.Runtime.NODEJS_18_X, entry: path.join(pathToMethod, `${type.toLowerCase()}.ts`), environment: this.environment, role: this.adminRole, logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH, functionName: `${cdk.Stack.of(this).stackName}-${methodName}`, timeout: cdk.Duration.seconds(30), memorySize: this.lambdaMemorySize }, props.functionProps), config.functionProps));
             this.lambdas[methodName] = method;
             let requestModels, requestParameters;
             if (config.model) {
