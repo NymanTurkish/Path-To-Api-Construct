@@ -43,7 +43,7 @@ interface domainConfig {
   certificate: cdk.aws_certificatemanager.Certificate;
 }
 
-interface apiProps {
+export interface apiProps {
   apiName: string;
   apiFolderPath: string;
   clientHostUrl?: string;
@@ -52,6 +52,7 @@ interface apiProps {
   deployOptions?: apigateway.RestApiProps;
   lambdaMemorySize?: number;
   authorizerMemorySize?: number;
+  functionProps?: nodejsLambda.NodejsFunctionProps;
 };
 
 export class CustomAPI extends Construct {
@@ -218,6 +219,7 @@ export class CustomAPI extends Construct {
       functionName: `${cdk.Stack.of(this).stackName}-${methodName}`,
       timeout: cdk.Duration.seconds(30),
       memorySize: this.lambdaMemorySize,
+      ...props.functionProps,
       ...config.functionProps
     });
 

@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
+import * as nodejsLambda from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
@@ -26,7 +27,7 @@ interface domainConfig {
     name: string;
     certificate: cdk.aws_certificatemanager.Certificate;
 }
-interface apiProps {
+export interface apiProps {
     apiName: string;
     apiFolderPath: string;
     clientHostUrl?: string;
@@ -37,6 +38,7 @@ interface apiProps {
     deployOptions?: apigateway.RestApiProps;
     lambdaMemorySize?: number;
     authorizerMemorySize?: number;
+    functionProps?: nodejsLambda.NodejsFunctionProps;
 }
 export declare class CustomAPI extends Construct {
     authorizers: {
