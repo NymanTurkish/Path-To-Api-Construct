@@ -219,6 +219,7 @@ export class CustomAPI extends Construct {
       functionName: `${cdk.Stack.of(this).stackName}-${methodName}`,
       timeout: cdk.Duration.seconds(30),
       memorySize: this.lambdaMemorySize,
+      ...props.functionProps,
       ...config.functionProps
     });
 
