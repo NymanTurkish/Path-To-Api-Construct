@@ -3,6 +3,7 @@ import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as nodejsLambda from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import { Construct } from 'constructs';
 export interface methodConfig {
     methods: {
@@ -39,10 +40,11 @@ export interface apiProps {
     lambdaMemorySize?: number;
     authorizerMemorySize?: number;
     functionProps?: nodejsLambda.NodejsFunctionProps;
+    cognitoUserPool?: cognito.UserPool;
 }
 export declare class CustomAPI extends Construct {
     authorizers: {
-        [key: string]: apigateway.RequestAuthorizer;
+        [key: string]: apigateway.RequestAuthorizer | apigateway.CognitoUserPoolsAuthorizer;
     };
     lambdas: {
         [key: string]: lambda.Function;

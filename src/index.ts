@@ -5,6 +5,7 @@ import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
+import * as cognito from 'aws-cdk-lib/aws-cognito';
 import { Construct } from 'constructs';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -53,10 +54,11 @@ export interface apiProps {
   lambdaMemorySize?: number;
   authorizerMemorySize?: number;
   functionProps?: nodejsLambda.NodejsFunctionProps;
+  cognitoUserPool?: cognito.UserPool;
 };
 
 export class CustomAPI extends Construct {
-  authorizers: { [key: string]: apigateway.RequestAuthorizer } = {};
+  authorizers: { [key: string]: apigateway.RequestAuthorizer | apigateway.CognitoUserPoolsAuthorizer } = {};
   lambdas: { [key: string]: lambda.Function } = {};
   environment?: { [key: string]: string };
   clientHostUrl?: string;
@@ -250,10 +252,19 @@ export class CustomAPI extends Construct {
 
     let authorizer = undefined;
     const authorizerName = config.authorizer || defaultAuthorizer;
-
+    
     if (this.authorizers[authorizerName]) {
       authorizer = this.authorizers[authorizerName]
-    } else {
+    } else if (authorizerName === 'COGNITO') {
+      if (!props.cognitoUserPool) {
+        throw new Error('Cognito User Pool not provided, yet was specified as authorizer for a method');
+      }
+      authorizer = new apigateway.CognitoUserPoolsAuthorizer(this, `${props.apiName}CognitoAuthorizer`, {
+        cognitoUserPools: [props.cognitoUserPool],
+      });
+      this.authorizers[authorizerName] = authorizer;
+    }
+    else {
       if (!fs.existsSync(`${props.apiFolderPath}/${authorizerName}.ts`)) {
         throw new Error(`Authorizer ${authorizerName} not found in ${props.apiFolderPath}`);
       }
@@ -282,7 +293,8 @@ export class CustomAPI extends Construct {
       },
       requestModels,
       requestParameters,
-      authorizer: config.authRequired ? authorizer : undefined
+      authorizer: config.authRequired ? authorizer : undefined,
+      authorizationType: props.cognitoUserPool ? apigateway.AuthorizationType.COGNITO : undefined,
     });
   }
 

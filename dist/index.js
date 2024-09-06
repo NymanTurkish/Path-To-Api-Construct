@@ -116,6 +116,15 @@ class CustomAPI extends constructs_1.Construct {
             if (this.authorizers[authorizerName]) {
                 authorizer = this.authorizers[authorizerName];
             }
+            else if (authorizerName === 'COGNITO') {
+                if (!props.cognitoUserPool) {
+                    throw new Error('Cognito User Pool not provided, yet was specified as authorizer for a method');
+                }
+                authorizer = new apigateway.CognitoUserPoolsAuthorizer(this, `${props.apiName}CognitoAuthorizer`, {
+                    cognitoUserPools: [props.cognitoUserPool],
+                });
+                this.authorizers[authorizerName] = authorizer;
+            }
             else {
                 if (!fs.existsSync(`${props.apiFolderPath}/${authorizerName}.ts`)) {
                     throw new Error(`Authorizer ${authorizerName} not found in ${props.apiFolderPath}`);
@@ -143,7 +152,8 @@ class CustomAPI extends constructs_1.Construct {
                 },
                 requestModels,
                 requestParameters,
-                authorizer: config.authRequired ? authorizer : undefined
+                authorizer: config.authRequired ? authorizer : undefined,
+                authorizationType: props.cognitoUserPool ? apigateway.AuthorizationType.COGNITO : undefined,
             });
         });
         this.pathToCamelCase = (path) => {
