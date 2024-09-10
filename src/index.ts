@@ -127,7 +127,7 @@ export class CustomAPI extends Construct {
         'Access-Control-Allow-Credentials': '\'true\''
       },
       templates: {
-        'application/json': '{ "message": "$context.error.messageString" }',
+        'application/json': '{ "message": "$context.error" }',
       }
     });
 
