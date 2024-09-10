@@ -151,6 +151,7 @@ class CustomAPI extends constructs_1.Construct {
                     validateRequestParameters: type === 'GET'
                 },
                 requestModels,
+                methodResponses: config.methodResponses,
                 requestParameters,
                 authorizer: config.authRequired ? authorizer : undefined,
                 authorizationType: props.cognitoUserPool ? apigateway.AuthorizationType.COGNITO : undefined,
@@ -195,6 +196,17 @@ class CustomAPI extends constructs_1.Construct {
                     'Salesforce-Instance-Url'
                 ]
             } }, gatewayOptions));
+        api.addGatewayResponse('BadRequestBody', {
+            type: apigateway.ResponseType.BAD_REQUEST_BODY,
+            statusCode: '400',
+            responseHeaders: {
+                'Access-Control-Allow-Origin': `'${this.clientHostUrl}'`,
+                'Access-Control-Allow-Credentials': '\'true\''
+            },
+            templates: {
+                'application/json': '{ "message": "$context.error.messageString" }',
+            }
+        });
         api.addGatewayResponse('ForbiddenResponse', {
             type: apigateway.ResponseType.ACCESS_DENIED,
             statusCode: '403',

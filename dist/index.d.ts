@@ -11,6 +11,7 @@ export interface methodConfig {
             authRequired: boolean;
             authorizer?: string;
             model: any;
+            methodResponses?: any;
         };
     };
 }
