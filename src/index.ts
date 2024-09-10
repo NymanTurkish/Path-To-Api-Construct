@@ -28,6 +28,7 @@ export interface methodConfig {
       authRequired: boolean;
       authorizer?: string;
       model: any;
+      methodResponses?: any;
     };
   };
 };
@@ -116,6 +117,18 @@ export class CustomAPI extends Construct {
         ]
       },
       ...gatewayOptions
+    });
+
+    api.addGatewayResponse('BadRequestBody', {
+      type: apigateway.ResponseType.BAD_REQUEST_BODY,
+      statusCode: '400',
+      responseHeaders: {
+        'Access-Control-Allow-Origin': `'${this.clientHostUrl}'`,
+        'Access-Control-Allow-Credentials': '\'true\''
+      },
+      templates: {
+        'application/json': '{ "message": "$context.error.messageString" }',
+      }
     });
 
     api.addGatewayResponse('ForbiddenResponse', {
@@ -292,6 +305,7 @@ export class CustomAPI extends Construct {
         validateRequestParameters: type === 'GET'
       },
       requestModels,
+      methodResponses: config.methodResponses,
       requestParameters,
       authorizer: config.authRequired ? authorizer : undefined,
       authorizationType: props.cognitoUserPool ? apigateway.AuthorizationType.COGNITO : undefined,
