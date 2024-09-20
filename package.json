@@ -9,7 +9,7 @@
   "author": "Nyman Turkish",
   "license": "ISC",
   "dependencies": {
-    "aws-cdk-lib": "^2.124.0",
+    "aws-cdk-lib": "^2.150.0",
     "aws-lambda": "^1.0.7"
   },
   "devDependencies": {
