@@ -1,4 +1,4 @@
-### vNEXT
+### v0.6
 - Adds support for LocalStack
 
 ### v0.5

@@ -1,10 +1,20 @@
 # Path-To-Api-Construct
 
+# Purpose
+This project was created to provide a concise code base for defining an API in projects using CDK & Typescript, preventing the need for a large amount of boilerplate code in every project.
+
+# How to build
+
+## Before making a PR
+
 > [!WARNING]
 > You must build before making a PR!
 
-# Purpose
-This project was created to provide a concise code base for defining an API in projects using CDK & Typescript, preventing the need for a large amount of boilerplate code in every project.
+When making changes to the code, you must also rebuild the library before deploying since this is what will be imported into other projects.
+
+Make sure to update the `CHANGELOG.md` file when you make changes.
+
+Once a PR is merged, you will need to create a release in Github.
 
 # Getting Started
 
