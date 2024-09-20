@@ -1,5 +1,4 @@
 import * as cdk from 'aws-cdk-lib';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as nodejsLambda from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambda from 'aws-cdk-lib/aws-lambda'
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -34,29 +33,81 @@ export interface methodConfig {
 interface apiRoute {
   routes: {[name: string]: apiRoute},
   methods: {[method: string]: any},
-  resource: apigateway.IResource
+  resource: cdk.aws_apigateway.IResource
 };
 
-interface domainConfig {
+interface IDomainConfig {
   baseName?: string; // Used when base domain already exists, and name is a subdomain. Otherwise leave empty.
   name: string;
   certificate: cdk.aws_certificatemanager.Certificate;
 }
 
-export interface apiProps {
+export interface IApiProps {
   apiName: string;
   apiFolderPath: string;
   clientHostUrl?: string;
   environment?: { [key: string]: string },
-  domainConfig?: domainConfig
-  deployOptions?: apigateway.RestApiProps;
+  domainConfig?: IDomainConfig
+  deployOptions?: cdk.aws_apigateway.RestApiProps;
   lambdaMemorySize?: number;
   authorizerMemorySize?: number;
   functionProps?: nodejsLambda.NodejsFunctionProps;
+  /**
+   * Whether we are deploying to localstack. When true, hot reloading is enabled and the `tsBaseOutputFolder` and `tsApiOutputFolder` must be provided.
+   */
+  isLocalStack?: boolean;
+  /**
+   * The absolute path of the base ts output folder. When isLocalStack is true, this is required.
+   */
+  tsBaseOutputFolder?: string;
+  /**
+   * The absolute path of the transpiled api folder. When isLocalStack is true, this is required.
+   */
+  tsApiOutputFolder?: string;
 };
 
+/**
+ * Returns the api folder path based on the isLocalStack flag.
+ * @param props 
+ * @returns 
+ */
+function getApiFolderPath(props: IApiProps) {
+  if (props.isLocalStack) {
+    if (!props.tsApiOutputFolder) {
+      throw new Error('tsApiOutputFolder is required when isLocalStack is true');
+    }
+    return props.tsApiOutputFolder;
+  }
+
+  return props.apiFolderPath;
+}
+
+/**
+ * Returns the config from the config.ts in the given directory.
+ * If we are in localstack mode, and the config.ts file does not exist, try to load the config.js file.
+ * @param directory 
+ * @returns 
+ */
+async function getConfigFromPath(directory: string, props: IApiProps) {
+  let configPath = path.join(directory, `config.${props.isLocalStack ? 'js' : 'ts'}`);
+
+  if (!fs.existsSync(configPath)) {
+    return undefined;
+  }
+
+  const { config } = await import(configPath);
+  return config as apiRoute;
+}
+
+function throwIfAuthorizerNotFound(apiFolderPath: string, authorizerName: string, props: IApiProps) {
+  const authorizerPath = path.join(apiFolderPath, `${authorizerName}.${props.isLocalStack ? 'js' : 'ts'}`);
+  if (!fs.existsSync(authorizerPath)) {
+    throw new Error(`Authorizer ${authorizerName} not found in ${apiFolderPath}`);
+  }
+}
+
 export class CustomAPI extends Construct {
-  authorizers: { [key: string]: apigateway.RequestAuthorizer } = {};
+  authorizers: { [key: string]: cdk.aws_apigateway.RequestAuthorizer } = {};
   lambdas: { [key: string]: lambda.Function } = {};
   environment?: { [key: string]: string };
   clientHostUrl?: string;
@@ -65,10 +116,11 @@ export class CustomAPI extends Construct {
   authorizerMemorySize: number;
   apiGateway: cdk.aws_apigateway.RestApi;
   lambdasReady: Promise<void>;
+  localstackHotReloadBucket: cdk.aws_s3.IBucket;
 
   private lambdasReadyResolve: () => void;
 
-  constructor(scope: Construct, id: string, props: apiProps) {
+  constructor(scope: Construct, id: string, props: IApiProps) {
     super(scope, id);
     this.environment = props.environment;
     this.clientHostUrl = props.clientHostUrl ?? '*';
@@ -86,23 +138,27 @@ export class CustomAPI extends Construct {
       ],
     });
 
+    if (props.isLocalStack) {
+      this.localstackHotReloadBucket = cdk.aws_s3.Bucket.fromBucketName(this, 'HotReloadBucket', 'hot-reload');
+    }
+
     let domainName = undefined;
     if (props.domainConfig) {
       domainName = {
         domainName: `api.${props.domainConfig.name}`,
         certificate: props.domainConfig.certificate,
-        endpointType: apigateway.EndpointType.EDGE,
-        securityPolicy: apigateway.SecurityPolicy.TLS_1_2
+        endpointType: cdk.aws_apigateway.EndpointType.EDGE,
+        securityPolicy: cdk.aws_apigateway.SecurityPolicy.TLS_1_2
       }
     }
 
     const gatewayOptions = props.deployOptions ?? {};
 
-    const api = new apigateway.RestApi(this, `${props.apiName}API`, {
+    const api = new cdk.aws_apigateway.RestApi(this, `${props.apiName}API`, {
       domainName,
       defaultCorsPreflightOptions: {
         allowOrigins: [this.clientHostUrl],
-        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowMethods: cdk.aws_apigateway.Cors.ALL_METHODS,
         allowHeaders: [
           'Accept',
           'Authorization',
@@ -117,7 +173,7 @@ export class CustomAPI extends Construct {
     });
 
     api.addGatewayResponse('ForbiddenResponse', {
-      type: apigateway.ResponseType.ACCESS_DENIED,
+      type: cdk.aws_apigateway.ResponseType.ACCESS_DENIED,
       statusCode: '403',
       responseHeaders: {
         'Access-Control-Allow-Origin': `'${this.clientHostUrl}'`,
@@ -129,7 +185,7 @@ export class CustomAPI extends Construct {
     });
 
     api.addGatewayResponse('UnauthorizedResponse', {
-      type: apigateway.ResponseType.ACCESS_DENIED,
+      type: cdk.aws_apigateway.ResponseType.ACCESS_DENIED,
       statusCode: '401',
       responseHeaders: {
         'Access-Control-Allow-Origin': `'${this.clientHostUrl}'`,
@@ -141,7 +197,7 @@ export class CustomAPI extends Construct {
     });
 
     api.addGatewayResponse('InternalServerErrorResponse', {
-      type: apigateway.ResponseType.DEFAULT_5XX,
+      type: cdk.aws_apigateway.ResponseType.DEFAULT_5XX,
       statusCode: '500',
       responseHeaders: {
         'Access-Control-Allow-Origin': `'${this.clientHostUrl}'`,
@@ -170,16 +226,42 @@ export class CustomAPI extends Construct {
       resource: api.root
     };
   
-    this.traverse(props.apiFolderPath, routes, props).then(() => {
+    this.traverse(getApiFolderPath(props), routes, props).then(() => {
       this.lambdasReadyResolve();
     });
   }
 
-  traverse = async (currentPath: string, currentNode: apiRoute, props:apiProps, parentName: string = '') => {
+  /**
+   * Returns the lambda entry point.
+   * If we are in localstack mode, we need to use the tsBaseOutputFolder and the handler will be the entry point.ts file.
+   * This allows for hot reloading and ensures that code above the api base folder is available for import
+   * If we are not in localstack mode, we can use the path to the method.
+   * @param props 
+   * @param pathToMethod 
+   * @param entryPoint 
+   * @returns 
+   */
+  private getLambdaEntryPoint = (props: IApiProps, pathToMethod: string, entryPoint: string) => {
+    if (props.isLocalStack) {    
+      if (!props.tsBaseOutputFolder) {
+        throw new Error('tsBaseOutputFolder is required when isLocalStack is true');
+      }
+
+      return {
+        code: cdk.aws_lambda.Code.fromBucket(this.localstackHotReloadBucket, props.tsBaseOutputFolder!),
+        handler: path.join(pathToMethod.substring(props.tsBaseOutputFolder!.length + 1 /* +1 to remove leading / */), `${entryPoint}.handler`),
+      }
+    } else {
+      return {
+        entry: path.join(pathToMethod, `${entryPoint}.ts`),
+      }
+    }
+  }
+
+  traverse = async (currentPath: string, currentNode: apiRoute, props: IApiProps, parentName: string = '') => {
     const entries = fs.readdirSync(currentPath);
 
-    for (let i = 0; i < entries.length; i++) {
-      const entry = entries[i];
+    for (const entry of entries) {
       const fullPath = path.join(currentPath, entry);
 
       if (fs.statSync(fullPath).isDirectory()) {
@@ -192,15 +274,12 @@ export class CustomAPI extends Construct {
           resource 
         };
 
-        const configPath = path.join(fullPath, 'config.ts');
-        if (fs.existsSync(configPath)) {
-          const { config } = await import(configPath);
+        const config = await getConfigFromPath(fullPath, props);
 
-          if (config.methods) {
-            for(const method in config.methods) {
-              const methodName = `${routeName}_${method}`;
-              currentNode.routes[entry].methods[method] = this.addMethod(method, resource, fullPath, config.methods[method], methodName, props);
-            }
+        if (config?.methods) {
+          for(const method in config.methods) {
+            const methodName = `${routeName}_${method}`;
+            currentNode.routes[entry].methods[method] = this.addMethod(method, resource, fullPath, config.methods[method], methodName, props);
           }
         }
         
@@ -209,10 +288,13 @@ export class CustomAPI extends Construct {
     };
   }
 
-  addMethod = async (type: string, resource: apigateway.IResource, pathToMethod: string, config: any, methodName: string, props: apiProps) => {
-    const method = new nodejsLambda.NodejsFunction(this, `${methodName}Function`, {
+  addMethod = async (type: string, resource: cdk.aws_apigateway.IResource, pathToMethod: string, config: any, methodName: string, props: IApiProps) => {
+    if (props.isLocalStack && !props.tsBaseOutputFolder) {
+      throw new Error('tsBaseOutputFolder is required when isLocalStack is true');
+    }
+
+    let methodProps : nodejsLambda.NodejsFunctionProps = {
       runtime: lambda.Runtime.NODEJS_18_X,
-      entry: path.join(pathToMethod, `${type.toLowerCase()}.ts`),
       environment: this.environment,
       role: this.adminRole,
       logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
@@ -220,8 +302,11 @@ export class CustomAPI extends Construct {
       timeout: cdk.Duration.seconds(30),
       memorySize: this.lambdaMemorySize,
       ...props.functionProps,
-      ...config.functionProps
-    });
+      ...config.functionProps,
+      ...this.getLambdaEntryPoint(props, pathToMethod, type.toLowerCase()),
+    };
+    
+    const method = new nodejsLambda.NodejsFunction(this, `${methodName}Function`, methodProps);
 
     this.lambdas[methodName] = method;
 
@@ -234,7 +319,7 @@ export class CustomAPI extends Construct {
           break;
         case HttpMethod.POST:
           requestModels = {
-            [config.model.contentType]: new apigateway.Model(
+            [config.model.contentType]: new cdk.aws_apigateway.Model(
               this, 
               `${methodName}RequestModel`, 
               { 
@@ -254,28 +339,31 @@ export class CustomAPI extends Construct {
     if (this.authorizers[authorizerName]) {
       authorizer = this.authorizers[authorizerName]
     } else {
-      if (!fs.existsSync(`${props.apiFolderPath}/${authorizerName}.ts`)) {
-        throw new Error(`Authorizer ${authorizerName} not found in ${props.apiFolderPath}`);
-      }
+      const apiFolderPath = getApiFolderPath(props);
 
-      const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, `${props.apiName}Lambda${authorizerName}`, {
+
+      throwIfAuthorizerNotFound(apiFolderPath, authorizerName, props);
+
+      let authorizerProps : nodejsLambda.NodejsFunctionProps = {
         runtime: lambda.Runtime.NODEJS_18_X,
-        entry: `${props.apiFolderPath}/${authorizerName}.ts`,
         functionName: `${cdk.Stack.of(this).stackName}-${authorizerName}`,
         logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
         environment: this.environment,
         memorySize: this.authorizerMemorySize,
-      });
-      authorizer = new apigateway.RequestAuthorizer(this, `${props.apiName}${authorizerName}`, {
+        ...this.getLambdaEntryPoint(props, apiFolderPath, authorizerName),
+      };
+
+      const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, `${props.apiName}Lambda${authorizerName}`, authorizerProps);
+      authorizer = new cdk.aws_apigateway.RequestAuthorizer(this, `${props.apiName}${authorizerName}`, {
         handler: lambdaAuthorizer,
-        identitySources: [apigateway.IdentitySource.header('Authorization')],
+        identitySources: [cdk.aws_apigateway.IdentitySource.header('Authorization')],
         resultsCacheTtl: cdk.Duration.seconds(0)
       });
       authorizer._attachToApi(resource.api);
       this.authorizers[authorizerName] = authorizer;
     } 
 
-    resource.addMethod(type, new apigateway.LambdaIntegration(method), {
+    resource.addMethod(type, new cdk.aws_apigateway.LambdaIntegration(method), {
       requestValidatorOptions: {
         validateRequestBody: type === 'POST',
         validateRequestParameters: type === 'GET'

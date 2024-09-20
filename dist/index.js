@@ -56,16 +56,77 @@ const defaultAuthorizer = 'default-authorizer';
 ;
 ;
 ;
+/**
+ * Returns the api folder path based on the isLocalStack flag.
+ * @param props
+ * @returns
+ */
+function getApiFolderPath(props) {
+    if (props.isLocalStack) {
+        if (!props.tsApiOutputFolder) {
+            throw new Error('tsApiOutputFolder is required when isLocalStack is true');
+        }
+        return props.tsApiOutputFolder;
+    }
+    return props.apiFolderPath;
+}
+/**
+ * Returns the config from the config.ts in the given directory.
+ * If we are in localstack mode, and the config.ts file does not exist, try to load the config.js file.
+ * @param directory
+ * @returns
+ */
+function getConfigFromPath(directory, props) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let configPath = path.join(directory, `config.${props.isLocalStack ? 'js' : 'ts'}`);
+        if (!fs.existsSync(configPath)) {
+            return undefined;
+        }
+        const { config } = yield Promise.resolve(`${configPath}`).then(s => __importStar(require(s)));
+        return config;
+    });
+}
+function throwIfAuthorizerNotFound(apiFolderPath, authorizerName, props) {
+    const authorizerPath = path.join(apiFolderPath, `${authorizerName}.${props.isLocalStack ? 'js' : 'ts'}`);
+    if (!fs.existsSync(authorizerPath)) {
+        throw new Error(`Authorizer ${authorizerName} not found in ${apiFolderPath}`);
+    }
+}
 class CustomAPI extends constructs_1.Construct {
     constructor(scope, id, props) {
         var _a, _b, _c, _d, _e;
         super(scope, id);
         this.authorizers = {};
         this.lambdas = {};
+        /**
+         * Returns the lambda entry point.
+         * If we are in localstack mode, we need to use the tsBaseOutputFolder and the handler will be the entry point.ts file.
+         * This allows for hot reloading and ensures that code above the api base folder is available for import
+         * If we are not in localstack mode, we can use the path to the method.
+         * @param props
+         * @param pathToMethod
+         * @param entryPoint
+         * @returns
+         */
+        this.getLambdaEntryPoint = (props, pathToMethod, entryPoint) => {
+            if (props.isLocalStack) {
+                if (!props.tsBaseOutputFolder) {
+                    throw new Error('tsBaseOutputFolder is required when isLocalStack is true');
+                }
+                return {
+                    code: cdk.aws_lambda.Code.fromBucket(this.localstackHotReloadBucket, props.tsBaseOutputFolder),
+                    handler: path.join(pathToMethod.substring(props.tsBaseOutputFolder.length + 1 /* +1 to remove leading / */), `${entryPoint}.handler`),
+                };
+            }
+            else {
+                return {
+                    entry: path.join(pathToMethod, `${entryPoint}.ts`),
+                };
+            }
+        };
         this.traverse = (currentPath_1, currentNode_1, props_1, ...args_1) => __awaiter(this, [currentPath_1, currentNode_1, props_1, ...args_1], void 0, function* (currentPath, currentNode, props, parentName = '') {
             const entries = fs.readdirSync(currentPath);
-            for (let i = 0; i < entries.length; i++) {
-                const entry = entries[i];
+            for (const entry of entries) {
                 const fullPath = path.join(currentPath, entry);
                 if (fs.statSync(fullPath).isDirectory()) {
                     const resource = currentNode.resource.addResource(entry);
@@ -76,14 +137,11 @@ class CustomAPI extends constructs_1.Construct {
                         methods: {},
                         resource
                     };
-                    const configPath = path.join(fullPath, 'config.ts');
-                    if (fs.existsSync(configPath)) {
-                        const { config } = yield Promise.resolve(`${configPath}`).then(s => __importStar(require(s)));
-                        if (config.methods) {
-                            for (const method in config.methods) {
-                                const methodName = `${routeName}_${method}`;
-                                currentNode.routes[entry].methods[method] = this.addMethod(method, resource, fullPath, config.methods[method], methodName, props);
-                            }
+                    const config = yield getConfigFromPath(fullPath, props);
+                    if (config === null || config === void 0 ? void 0 : config.methods) {
+                        for (const method in config.methods) {
+                            const methodName = `${routeName}_${method}`;
+                            currentNode.routes[entry].methods[method] = this.addMethod(method, resource, fullPath, config.methods[method], methodName, props);
                         }
                     }
                     yield this.traverse(fullPath, currentNode.routes[entry], props, routeName);
@@ -92,7 +150,11 @@ class CustomAPI extends constructs_1.Construct {
             ;
         });
         this.addMethod = (type, resource, pathToMethod, config, methodName, props) => __awaiter(this, void 0, void 0, function* () {
-            const method = new nodejsLambda.NodejsFunction(this, `${methodName}Function`, Object.assign(Object.assign({ runtime: lambda.Runtime.NODEJS_18_X, entry: path.join(pathToMethod, `${type.toLowerCase()}.ts`), environment: this.environment, role: this.adminRole, logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH, functionName: `${cdk.Stack.of(this).stackName}-${methodName}`, timeout: cdk.Duration.seconds(30), memorySize: this.lambdaMemorySize }, props.functionProps), config.functionProps));
+            if (props.isLocalStack && !props.tsBaseOutputFolder) {
+                throw new Error('tsBaseOutputFolder is required when isLocalStack is true');
+            }
+            let methodProps = Object.assign(Object.assign(Object.assign({ runtime: lambda.Runtime.NODEJS_18_X, environment: this.environment, role: this.adminRole, logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH, functionName: `${cdk.Stack.of(this).stackName}-${methodName}`, timeout: cdk.Duration.seconds(30), memorySize: this.lambdaMemorySize }, props.functionProps), config.functionProps), this.getLambdaEntryPoint(props, pathToMethod, type.toLowerCase()));
+            const method = new nodejsLambda.NodejsFunction(this, `${methodName}Function`, methodProps);
             this.lambdas[methodName] = method;
             let requestModels, requestParameters;
             if (config.model) {
@@ -117,17 +179,10 @@ class CustomAPI extends constructs_1.Construct {
                 authorizer = this.authorizers[authorizerName];
             }
             else {
-                if (!fs.existsSync(`${props.apiFolderPath}/${authorizerName}.ts`)) {
-                    throw new Error(`Authorizer ${authorizerName} not found in ${props.apiFolderPath}`);
-                }
-                const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, `${props.apiName}Lambda${authorizerName}`, {
-                    runtime: lambda.Runtime.NODEJS_18_X,
-                    entry: `${props.apiFolderPath}/${authorizerName}.ts`,
-                    functionName: `${cdk.Stack.of(this).stackName}-${authorizerName}`,
-                    logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
-                    environment: this.environment,
-                    memorySize: this.authorizerMemorySize,
-                });
+                const apiFolderPath = getApiFolderPath(props);
+                throwIfAuthorizerNotFound(apiFolderPath, authorizerName, props);
+                let authorizerProps = Object.assign({ runtime: lambda.Runtime.NODEJS_18_X, functionName: `${cdk.Stack.of(this).stackName}-${authorizerName}`, logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH, environment: this.environment, memorySize: this.authorizerMemorySize }, this.getLambdaEntryPoint(props, apiFolderPath, authorizerName));
+                const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, `${props.apiName}Lambda${authorizerName}`, authorizerProps);
                 authorizer = new apigateway.RequestAuthorizer(this, `${props.apiName}${authorizerName}`, {
                     handler: lambdaAuthorizer,
                     identitySources: [apigateway.IdentitySource.header('Authorization')],
@@ -162,6 +217,9 @@ class CustomAPI extends constructs_1.Construct {
                 iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'),
             ],
         });
+        if (props.isLocalStack) {
+            this.localstackHotReloadBucket = cdk.aws_s3.Bucket.fromBucketName(this, 'HotReloadBucket', 'hot-reload');
+        }
         let domainName = undefined;
         if (props.domainConfig) {
             domainName = {
@@ -232,7 +290,7 @@ class CustomAPI extends constructs_1.Construct {
             methods: {},
             resource: api.root
         };
-        this.traverse(props.apiFolderPath, routes, props).then(() => {
+        this.traverse(getApiFolderPath(props), routes, props).then(() => {
             this.lambdasReadyResolve();
         });
     }
