@@ -34,7 +34,6 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.CustomAPI = void 0;
 const cdk = __importStar(require("aws-cdk-lib"));
-const apigateway = __importStar(require("aws-cdk-lib/aws-apigateway"));
 const nodejsLambda = __importStar(require("aws-cdk-lib/aws-lambda-nodejs"));
 const lambda = __importStar(require("aws-cdk-lib/aws-lambda"));
 const iam = __importStar(require("aws-cdk-lib/aws-iam"));
@@ -164,7 +163,7 @@ class CustomAPI extends constructs_1.Construct {
                         break;
                     case HttpMethod.POST:
                         requestModels = {
-                            [config.model.contentType]: new apigateway.Model(this, `${methodName}RequestModel`, {
+                            [config.model.contentType]: new cdk.aws_apigateway.Model(this, `${methodName}RequestModel`, {
                                 restApi: resource.api,
                                 contentType: config.model.contentType,
                                 schema: config.model.schema
@@ -183,15 +182,15 @@ class CustomAPI extends constructs_1.Construct {
                 throwIfAuthorizerNotFound(apiFolderPath, authorizerName, props);
                 let authorizerProps = Object.assign({ runtime: lambda.Runtime.NODEJS_18_X, functionName: `${cdk.Stack.of(this).stackName}-${authorizerName}`, logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH, environment: this.environment, memorySize: this.authorizerMemorySize }, this.getLambdaEntryPoint(props, apiFolderPath, authorizerName));
                 const lambdaAuthorizer = new nodejsLambda.NodejsFunction(this, `${props.apiName}Lambda${authorizerName}`, authorizerProps);
-                authorizer = new apigateway.RequestAuthorizer(this, `${props.apiName}${authorizerName}`, {
+                authorizer = new cdk.aws_apigateway.RequestAuthorizer(this, `${props.apiName}${authorizerName}`, {
                     handler: lambdaAuthorizer,
-                    identitySources: [apigateway.IdentitySource.header('Authorization')],
+                    identitySources: [cdk.aws_apigateway.IdentitySource.header('Authorization')],
                     resultsCacheTtl: cdk.Duration.seconds(0)
                 });
                 authorizer._attachToApi(resource.api);
                 this.authorizers[authorizerName] = authorizer;
             }
-            resource.addMethod(type, new apigateway.LambdaIntegration(method), {
+            resource.addMethod(type, new cdk.aws_apigateway.LambdaIntegration(method), {
                 requestValidatorOptions: {
                     validateRequestBody: type === 'POST',
                     validateRequestParameters: type === 'GET'
@@ -225,14 +224,14 @@ class CustomAPI extends constructs_1.Construct {
             domainName = {
                 domainName: `api.${props.domainConfig.name}`,
                 certificate: props.domainConfig.certificate,
-                endpointType: apigateway.EndpointType.EDGE,
-                securityPolicy: apigateway.SecurityPolicy.TLS_1_2
+                endpointType: cdk.aws_apigateway.EndpointType.EDGE,
+                securityPolicy: cdk.aws_apigateway.SecurityPolicy.TLS_1_2
             };
         }
         const gatewayOptions = (_d = props.deployOptions) !== null && _d !== void 0 ? _d : {};
-        const api = new apigateway.RestApi(this, `${props.apiName}API`, Object.assign({ domainName, defaultCorsPreflightOptions: {
+        const api = new cdk.aws_apigateway.RestApi(this, `${props.apiName}API`, Object.assign({ domainName, defaultCorsPreflightOptions: {
                 allowOrigins: [this.clientHostUrl],
-                allowMethods: apigateway.Cors.ALL_METHODS,
+                allowMethods: cdk.aws_apigateway.Cors.ALL_METHODS,
                 allowHeaders: [
                     'Accept',
                     'Authorization',
@@ -244,7 +243,7 @@ class CustomAPI extends constructs_1.Construct {
                 ]
             } }, gatewayOptions));
         api.addGatewayResponse('ForbiddenResponse', {
-            type: apigateway.ResponseType.ACCESS_DENIED,
+            type: cdk.aws_apigateway.ResponseType.ACCESS_DENIED,
             statusCode: '403',
             responseHeaders: {
                 'Access-Control-Allow-Origin': `'${this.clientHostUrl}'`,
@@ -255,7 +254,7 @@ class CustomAPI extends constructs_1.Construct {
             }
         });
         api.addGatewayResponse('UnauthorizedResponse', {
-            type: apigateway.ResponseType.ACCESS_DENIED,
+            type: cdk.aws_apigateway.ResponseType.ACCESS_DENIED,
             statusCode: '401',
             responseHeaders: {
                 'Access-Control-Allow-Origin': `'${this.clientHostUrl}'`,
@@ -266,7 +265,7 @@ class CustomAPI extends constructs_1.Construct {
             }
         });
         api.addGatewayResponse('InternalServerErrorResponse', {
-            type: apigateway.ResponseType.DEFAULT_5XX,
+            type: cdk.aws_apigateway.ResponseType.DEFAULT_5XX,
             statusCode: '500',
             responseHeaders: {
                 'Access-Control-Allow-Origin': `'${this.clientHostUrl}'`,

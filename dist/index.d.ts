@@ -1,5 +1,4 @@
 import * as cdk from 'aws-cdk-lib';
-import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as nodejsLambda from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -20,22 +19,22 @@ interface apiRoute {
     methods: {
         [method: string]: any;
     };
-    resource: apigateway.IResource;
+    resource: cdk.aws_apigateway.IResource;
 }
-interface domainConfig {
+interface IDomainConfig {
     baseName?: string;
     name: string;
     certificate: cdk.aws_certificatemanager.Certificate;
 }
-export interface apiProps {
+export interface IApiProps {
     apiName: string;
     apiFolderPath: string;
     clientHostUrl?: string;
     environment?: {
         [key: string]: string;
     };
-    domainConfig?: domainConfig;
-    deployOptions?: apigateway.RestApiProps;
+    domainConfig?: IDomainConfig;
+    deployOptions?: cdk.aws_apigateway.RestApiProps;
     lambdaMemorySize?: number;
     authorizerMemorySize?: number;
     functionProps?: nodejsLambda.NodejsFunctionProps;
@@ -54,7 +53,7 @@ export interface apiProps {
 }
 export declare class CustomAPI extends Construct {
     authorizers: {
-        [key: string]: apigateway.RequestAuthorizer;
+        [key: string]: cdk.aws_apigateway.RequestAuthorizer;
     };
     lambdas: {
         [key: string]: lambda.Function;
@@ -70,7 +69,7 @@ export declare class CustomAPI extends Construct {
     lambdasReady: Promise<void>;
     localstackHotReloadBucket: cdk.aws_s3.IBucket;
     private lambdasReadyResolve;
-    constructor(scope: Construct, id: string, props: apiProps);
+    constructor(scope: Construct, id: string, props: IApiProps);
     /**
      * Returns the lambda entry point.
      * If we are in localstack mode, we need to use the tsBaseOutputFolder and the handler will be the entry point.ts file.
@@ -82,8 +81,8 @@ export declare class CustomAPI extends Construct {
      * @returns
      */
     private getLambdaEntryPoint;
-    traverse: (currentPath: string, currentNode: apiRoute, props: apiProps, parentName?: string) => Promise<void>;
-    addMethod: (type: string, resource: apigateway.IResource, pathToMethod: string, config: any, methodName: string, props: apiProps) => Promise<void>;
+    traverse: (currentPath: string, currentNode: apiRoute, props: IApiProps, parentName?: string) => Promise<void>;
+    addMethod: (type: string, resource: cdk.aws_apigateway.IResource, pathToMethod: string, config: any, methodName: string, props: IApiProps) => Promise<void>;
     pathToCamelCase: (path: string) => string;
 }
 export {};
