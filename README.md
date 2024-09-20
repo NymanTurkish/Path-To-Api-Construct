@@ -84,6 +84,9 @@ then the following apis will be created:
 
 ## Localstack
 
+>[!INFO]
+>Localstack is not technically required by this tool but it is recommended for development. See the [LocalStack docs](https://docs.localstack.cloud/getting-started/installation/) for information on how to install.
+
 Localstack is used to provide a local api for testing. To use localstack, set the `isLocalStack` flag to `true` in the `config.ts` file. You must also provide the `tsBaseOutputFolder` and `tsApiOutputFolder` properties to the construct. These should be set to the base and api output folders for your ts project.
 
 > [!NOTE]
