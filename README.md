@@ -82,6 +82,11 @@ then the following apis will be created:
 - GET {api-endpoint}/foo/bar
 - POST {api-endpoint}/foo/bar
 
+Each endpoint will be handled by a lambda function stored in a file with the (lowercase) method name. For example, the lambda function for the `GET /foo` api will be stored in `foo/get.ts`.
+
+> [!IMPORTANT]
+> The endpoint code must export a function named `handler` e.g. `export const handler = async (event: APIGatewayEvent) => { ... }`
+
 ## Localstack
 
 >[!INFO]
