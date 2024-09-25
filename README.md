@@ -87,19 +87,35 @@ Each endpoint will be handled by a lambda function stored in a file with the (lo
 > [!IMPORTANT]
 > The endpoint code must export a function named `handler` e.g. `export const handler = async (event: APIGatewayEvent) => { ... }`
 
+## Permissions
+
+You are responsible for providing the necessary IAM permissions for your Lambdas. This can be accomplished by waiting for the construct to finish creating the Lambdas and then adding the necessary policies to each. For example:
+
+```ts
+  // supposing you have a dynamo table that you want to grant access to
+  const dynamodb = new cdk.aws_dynamodb.Table(this, 'MyTable', { ... });
+
+  // you'll create the api construct like this
+  const api = new CustomAPI(this, 'MyApi', { ... });
+
+  // then wait for the lambdas to be ready and grant access
+  api.waitForLambdasReady.then((routes: { [key: string]: cdk.aws_lambda.Function }) => {
+    // the key is the route path e.g. foo plus an underscore and the method name
+    // so foo_get is the get method for the foo endpoint
+    dynamodb.grantReadWriteData(routes['foo_get']);
+  });
+```
+
 ## Localstack
 
 >[!INFO]
 >Localstack is not technically required by this tool but it is recommended for development. See the [LocalStack docs](https://docs.localstack.cloud/getting-started/installation/) for information on how to install.
 
-Localstack is used to provide a local api for testing. To use localstack, set the `isLocalStack` flag to `true` in the `config.ts` file. You must also provide the `tsBaseOutputFolder` and `tsApiOutputFolder` properties to the construct. These should be set to the base and api output folders for your ts project.
-
-> [!NOTE]
-> The entire `tsBaseOutputFolder` will be bundled into the Lambda for each method while the `tsApiOutputFolder` will be used to find the files for each api method.
+Localstack is used to provide a local api for testing. To use localstack, set the `isLocalStack` flag to `true` in the `config.ts` file. You must also provide the `tsBuildOutputFolder` property to the construct.
 
 ### Configuring your package.json
 
-When using LocalStack, your app will be responsible for starting Localstack, performing the initial deploy, as well as transpiling the source Typescript source code into the folder specified by `tsApiOutputFolder`. You'll also want to have `tsc --watch` running to ensure that the source code is transpiled as it changes.
+When using LocalStack, your app will be responsible for starting Localstack, performing the initial deploy, as well as transpiling the source Typescript source code into the folder specified by `tsBuildOutputFolder`. You'll also want to have `tsc --watch` running to ensure that the source code is transpiled as it changes.
 
 It's recommended to use `npm-run-all` to run the `localstack` and `watch` scripts in parallel. You can install this by running:
 
@@ -116,7 +132,7 @@ Then when you first start the app, you'll want to run `npm run deploy-local` to 
 }
 ```
 
-By running `npm run start`, the `localstack` and `watch` scripts will be run in parallel. The `localstack` script will start LocalStack, and the `watch` script will run `tsc --watch` in the `tsBaseOutputFolder`. This will ensure that the source code is transpiled as it changes.
+By running `npm run start`, the `localstack` and `watch` scripts will be run in parallel. The `localstack` script will start LocalStack, and the `watch` script will run `tsc --watch` in the `tsBuildOutputFolder`. This will ensure that the source code is transpiled as it changes.
 
 ## Properties
 
@@ -136,9 +152,9 @@ At minimum, you must provide the `apiName` and `apiFolderPath` properties.
 | lambdaMemorySize | number | No | The memory size of the api's Lambda methods. |
 | authorizerMemorySize | number | No | The memory size of the api's authorizer Lambda method. |
 | functionProps | cdk.aws_lambda_nodejs.NodejsFunctionProps | No | The props to pass to the api's Lambda methods. |
-| isLocalStack | boolean | No | Whether we are deploying to localstack. When true, hot reloading is enabled and the `tsBaseOutputFolder` and `tsApiOutputFolder` must be provided. |
-| tsBaseOutputFolder | string | No | The absolute path of the base ts output folder. When isLocalStack is true, this is required. |
-| tsApiOutputFolder | string | No | The absolute path of the transpiled api folder. When isLocalStack is true, this is required. |
+| isLocalStack | boolean | No | Whether we are deploying to localstack. When true, hot reloading is enabled and the `tsBuildOutputFolder` must be provided. |
+| tsBuildOutputFolder | string | No | The absolute path of the transpiled api folder. When isLocalStack is true, this is required. |
+| sourcePath | string | No | The absolute path of the source code folder |
 
 ## Example Usage
 
@@ -147,9 +163,8 @@ import { CustomAPI } from 'path-to-api-construct';
 
 const api = new CustomAPI(this, 'RecordRequestApi', {
   apiName: 'MyApi',
-  apiFolderPath: path.join(__dirname, '..', 'src', 'api'),
+  sourcePath: path.join(__dirname, '..', 'src', 'api'),
   isLocalStack: true,
-  tsBaseOutputFolder: path.join(__dirname, '..', 'src', 'dist'),
-  tsApiOutputFolder: path.join(__dirname, '..', 'src', 'dist', 'api'),
+  tsBuildOutputFolder: path.join(__dirname, '..', 'src', 'dist', 'api'),
 });
 ```
