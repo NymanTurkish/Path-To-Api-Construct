@@ -1,5 +1,7 @@
 ### v0.6
-- Adds support for LocalStack
+- Adds separate NodejsFunction `generate` method for creating Lambda functions with Localstack support
+- Remove legacy `logRetention` in favor of `LogGroup` for Lambda functions
+- Breaking change: remove `AdministratorAccess` role from API in favor on requiring manually setting permissions
 
 ### v0.5
 - Exposes the `functionProps` on `apiProps` so that you can provide additional function parameters to be applied during creation.
