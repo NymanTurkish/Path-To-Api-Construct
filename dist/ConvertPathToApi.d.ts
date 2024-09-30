@@ -29,26 +29,23 @@ export interface IApiProps {
     apiName: string;
     apiFolderPath: string;
     clientHostUrl?: string;
-    environment?: {
-        [key: string]: string;
-    };
     domainConfig?: IDomainConfig;
     deployOptions?: cdk.aws_apigateway.RestApiProps;
     lambdaMemorySize?: number;
     authorizerMemorySize?: number;
     functionProps?: Extract<NodejsFunctionProps, cdk.aws_lambda_nodejs.NodejsFunctionProps>;
     /**
-     * @see NodejsFunctionProps.isLocalStack
-     */
-    isLocalStack?: boolean;
-    /**
      * @see NodejsFunctionProps.tsBuildOutputFolder
      */
-    tsBuildOutputFolder?: string;
+    tsBuildOutputFolder?: NodejsFunctionProps['tsBuildOutputFolder'];
     /**
      * @see NodejsFunctionProps.sourcePath
      */
-    sourcePath: string;
+    sourcePath: NodejsFunctionProps['sourcePath'];
+    /**
+     * @see NodejsFunctionProps.environment
+     */
+    environment: NodejsFunctionProps['environment'];
 }
 export declare class CustomAPI extends Construct {
     authorizers: {
@@ -57,9 +54,7 @@ export declare class CustomAPI extends Construct {
     lambdas: {
         [key: string]: lambda.Function;
     };
-    environment?: {
-        [key: string]: string;
-    };
+    environment: NodejsFunctionProps['environment'];
     clientHostUrl?: string;
     lambdaMemorySize: number;
     authorizerMemorySize: number;

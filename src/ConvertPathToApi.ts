@@ -46,35 +46,34 @@ export interface IApiProps {
   apiName: string;
   apiFolderPath: string;
   clientHostUrl?: string;
-  environment?: { [key: string]: string },
   domainConfig?: IDomainConfig
   deployOptions?: cdk.aws_apigateway.RestApiProps;
   lambdaMemorySize?: number;
   authorizerMemorySize?: number;
   functionProps?: Extract<NodejsFunctionProps, cdk.aws_lambda_nodejs.NodejsFunctionProps>;
   /**
-   * @see NodejsFunctionProps.isLocalStack
-   */
-  isLocalStack?: boolean;
-  /**
    * @see NodejsFunctionProps.tsBuildOutputFolder
    */
-  tsBuildOutputFolder?: string;
+  tsBuildOutputFolder?: NodejsFunctionProps['tsBuildOutputFolder'];
   /**
    * @see NodejsFunctionProps.sourcePath
    */
-  sourcePath: string;
+  sourcePath: NodejsFunctionProps['sourcePath'];
+  /**
+   * @see NodejsFunctionProps.environment
+   */
+  environment: NodejsFunctionProps['environment'];
 };
 
 /**
- * Returns the api folder path based on the isLocalStack flag.
+ * Returns the api folder path in the tsBuildOutputFolder if ENV is "local" otherwise in the sourcePath.
  * @param props 
  * @returns 
  */
 function getApiFolderPath(props: IApiProps) {
-  if (props.isLocalStack) {
+  if (props.environment.ENV === 'local') {
     if (!props.tsBuildOutputFolder) {
-      throw new Error('tsBuildOutputFolder is required when isLocalStack is true');
+      throw new Error('tsBuildOutputFolder is required when ENV is "local"');
     }
     return props.tsBuildOutputFolder;
   }
@@ -89,7 +88,7 @@ function getApiFolderPath(props: IApiProps) {
  * @returns 
  */
 async function getConfigFromPath(directory: string, props: IApiProps) {
-  let configPath = path.join(directory, `config.${props.isLocalStack ? 'js' : 'ts'}`);
+  let configPath = path.join(directory, `config.${props.environment.ENV === 'local' ? 'js' : 'ts'}`);
 
   if (!fs.existsSync(configPath)) {
     return undefined;
@@ -100,7 +99,7 @@ async function getConfigFromPath(directory: string, props: IApiProps) {
 }
 
 function throwIfAuthorizerNotFound(apiFolderPath: string, authorizerName: string, props: IApiProps) {
-  const authorizerPath = path.join(apiFolderPath, `${authorizerName}.${props.isLocalStack ? 'js' : 'ts'}`);
+  const authorizerPath = path.join(apiFolderPath, `${authorizerName}.${props.environment.ENV === 'local' ? 'js' : 'ts'}`);
   if (!fs.existsSync(authorizerPath)) {
     throw new Error(`Authorizer ${authorizerName} not found in ${apiFolderPath}`);
   }
@@ -109,7 +108,7 @@ function throwIfAuthorizerNotFound(apiFolderPath: string, authorizerName: string
 export class CustomAPI extends Construct {
   authorizers: { [key: string]: cdk.aws_apigateway.RequestAuthorizer } = {};
   lambdas: { [key: string]: lambda.Function } = {};
-  environment?: { [key: string]: string };
+  environment: NodejsFunctionProps['environment'];;
   clientHostUrl?: string;
   lambdaMemorySize: number;
   authorizerMemorySize: number;
@@ -146,7 +145,7 @@ export class CustomAPI extends Construct {
       this.lambdasReadyResolve = resolve;
     });
 
-    if (props.isLocalStack) {
+    if (props.environment.ENV === 'local') {
       this.localstackHotReloadBucket = cdk.aws_s3.Bucket.fromBucketName(this, 'HotReloadBucket', 'hot-reload');
     }
 
@@ -285,7 +284,6 @@ export class CustomAPI extends Construct {
       memorySize: this.lambdaMemorySize,
       ...props.functionProps,
       ...config.functionProps,
-      isLocalStack: props.isLocalStack,
       tsBuildOutputFolder: props.tsBuildOutputFolder,
       sourcePath: props.sourcePath,
       relativePathToHandler: path.join(relativePathToMethod, `${type.toLowerCase()}.ts`),
@@ -336,7 +334,6 @@ export class CustomAPI extends Construct {
         }),
         environment: this.environment,
         memorySize: this.authorizerMemorySize,
-        isLocalStack: props.isLocalStack,
         tsBuildOutputFolder: props.tsBuildOutputFolder,
         sourcePath: props.sourcePath,
         relativePathToHandler: `${authorizerName}.ts`

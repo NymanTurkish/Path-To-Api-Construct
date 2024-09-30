@@ -1,14 +1,17 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as path from 'path';
+import { DatadogInstance } from './DatadogInstance';
 
 
-export type NodejsFunctionProps = Exclude<cdk.aws_lambda_nodejs.NodejsFunctionProps, 'code'|'handler'|'entry'> & {
-    /**
-     * Whether we're running in localstack mode.
-     * If true, the code and handler will be loaded from the tsBuildOutputFolder and hot reloading will be enabled.
-     */
-    isLocalStack?: boolean;
+/**
+ * The environment of the lambda function. If set to "local", the expectation is that the code is running on Localstack
+ * therefore the tsBuildOutputFolder is required and the code will be loaded from there with hot reloading support.
+ */
+export type ENV = 'local' | 'dev' | 'uat' | 'prod' | string;
+
+
+export type NodejsFunctionProps = Exclude<cdk.aws_lambda_nodejs.NodejsFunctionProps, 'code'|'handler'|'entry'|'environment'> & {
     /**
      * The absolute path to the root folder of the build output.
      * This is only required if isLocalStack is true.
@@ -25,6 +28,18 @@ export type NodejsFunctionProps = Exclude<cdk.aws_lambda_nodejs.NodejsFunctionPr
      * other than the `.ts` extension, this should be the same as the relative path to the handler in the tsBuildOutputFolder
      */
     relativePathToHandler: string;
+
+    /**
+     * Key-value pairs that Lambda caches and makes available for your Lambda
+     * functions. Use environment variables to apply configuration changes, such
+     * as test and production environment configurations, without changing your
+     * Lambda function source code.
+     *
+     * @default - No environment variables.
+     */
+    readonly environment: { ENV: ENV } & {
+        [key: string]: string;
+    };
 }
 
 /**
@@ -33,12 +48,12 @@ export type NodejsFunctionProps = Exclude<cdk.aws_lambda_nodejs.NodejsFunctionPr
 export class NodejsFunction {
     private static hotReloadBucket: cdk.aws_s3.IBucket;
     public static generate(scope: Construct, id: string, props: NodejsFunctionProps): cdk.aws_lambda_nodejs.NodejsFunction {
-        const {isLocalStack, tsBuildOutputFolder, sourcePath, relativePathToHandler, ...propsRest} = props;
+        const {environment, tsBuildOutputFolder, sourcePath, relativePathToHandler, ...propsRest} = props;
         let lambdaProps : cdk.aws_lambda_nodejs.NodejsFunctionProps;
 
         const parsedHandlerPath = path.parse(relativePathToHandler);
 
-        if (isLocalStack) {
+        if (environment.ENV === 'local') {
             if (!tsBuildOutputFolder) {
                 throw new Error('tsBuildOutputFolder is required when isLocalStack is true');
             }
@@ -57,6 +72,9 @@ export class NodejsFunction {
             }
         }
         
-        return new cdk.aws_lambda_nodejs.NodejsFunction(scope, id, lambdaProps);
+        const lambda = new cdk.aws_lambda_nodejs.NodejsFunction(scope, id, lambdaProps);
+        DatadogInstance.getInstance(scope, props.environment.ENV).addLambdaFunctions([lambda]);
+
+        return lambda;
     }
 }

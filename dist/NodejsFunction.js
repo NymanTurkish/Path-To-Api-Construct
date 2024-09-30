@@ -37,15 +37,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.NodejsFunction = void 0;
 const cdk = __importStar(require("aws-cdk-lib"));
 const path = __importStar(require("path"));
+const DatadogInstance_1 = require("./DatadogInstance");
 /**
  * Helper class to create a NodejsFunction with hot reloading support when running in localstack mode.
  */
 class NodejsFunction {
     static generate(scope, id, props) {
-        const { isLocalStack, tsBuildOutputFolder, sourcePath, relativePathToHandler } = props, propsRest = __rest(props, ["isLocalStack", "tsBuildOutputFolder", "sourcePath", "relativePathToHandler"]);
+        const { environment, tsBuildOutputFolder, sourcePath, relativePathToHandler } = props, propsRest = __rest(props, ["environment", "tsBuildOutputFolder", "sourcePath", "relativePathToHandler"]);
         let lambdaProps;
         const parsedHandlerPath = path.parse(relativePathToHandler);
-        if (isLocalStack) {
+        if (environment.ENV === 'local') {
             if (!tsBuildOutputFolder) {
                 throw new Error('tsBuildOutputFolder is required when isLocalStack is true');
             }
@@ -55,7 +56,9 @@ class NodejsFunction {
         else {
             lambdaProps = Object.assign(Object.assign({}, propsRest), { entry: path.join(sourcePath, parsedHandlerPath.dir, parsedHandlerPath.base) });
         }
-        return new cdk.aws_lambda_nodejs.NodejsFunction(scope, id, lambdaProps);
+        const lambda = new cdk.aws_lambda_nodejs.NodejsFunction(scope, id, lambdaProps);
+        DatadogInstance_1.DatadogInstance.getInstance(scope, props.environment.ENV).addLambdaFunctions([lambda]);
+        return lambda;
     }
 }
 exports.NodejsFunction = NodejsFunction;

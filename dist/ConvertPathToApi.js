@@ -55,14 +55,14 @@ const defaultAuthorizer = 'default-authorizer';
 ;
 ;
 /**
- * Returns the api folder path based on the isLocalStack flag.
+ * Returns the api folder path in the tsBuildOutputFolder if ENV is "local" otherwise in the sourcePath.
  * @param props
  * @returns
  */
 function getApiFolderPath(props) {
-    if (props.isLocalStack) {
+    if (props.environment.ENV === 'local') {
         if (!props.tsBuildOutputFolder) {
-            throw new Error('tsBuildOutputFolder is required when isLocalStack is true');
+            throw new Error('tsBuildOutputFolder is required when ENV is "local"');
         }
         return props.tsBuildOutputFolder;
     }
@@ -76,7 +76,7 @@ function getApiFolderPath(props) {
  */
 function getConfigFromPath(directory, props) {
     return __awaiter(this, void 0, void 0, function* () {
-        let configPath = path.join(directory, `config.${props.isLocalStack ? 'js' : 'ts'}`);
+        let configPath = path.join(directory, `config.${props.environment.ENV === 'local' ? 'js' : 'ts'}`);
         if (!fs.existsSync(configPath)) {
             return undefined;
         }
@@ -85,12 +85,13 @@ function getConfigFromPath(directory, props) {
     });
 }
 function throwIfAuthorizerNotFound(apiFolderPath, authorizerName, props) {
-    const authorizerPath = path.join(apiFolderPath, `${authorizerName}.${props.isLocalStack ? 'js' : 'ts'}`);
+    const authorizerPath = path.join(apiFolderPath, `${authorizerName}.${props.environment.ENV === 'local' ? 'js' : 'ts'}`);
     if (!fs.existsSync(authorizerPath)) {
         throw new Error(`Authorizer ${authorizerName} not found in ${apiFolderPath}`);
     }
 }
 class CustomAPI extends constructs_1.Construct {
+    ;
     constructor(scope, id, props) {
         var _a, _b, _c, _d, _e;
         super(scope, id);
@@ -126,7 +127,7 @@ class CustomAPI extends constructs_1.Construct {
             const method = NodejsFunction_1.NodejsFunction.generate(this, `${methodName}Function`, Object.assign(Object.assign(Object.assign({ runtime: lambda.Runtime.NODEJS_18_X, environment: this.environment, functionName: `${cdk.Stack.of(this).stackName}-${methodName}`, logGroup: new cdk.aws_logs.LogGroup(this, `${methodName}LogGroup`, {
                     logGroupName: `/aws/lambda/${cdk.Stack.of(this).stackName}-${methodName}`,
                     retention: cdk.aws_logs.RetentionDays.ONE_YEAR
-                }), timeout: cdk.Duration.seconds(30), memorySize: this.lambdaMemorySize }, props.functionProps), config.functionProps), { isLocalStack: props.isLocalStack, tsBuildOutputFolder: props.tsBuildOutputFolder, sourcePath: props.sourcePath, relativePathToHandler: path.join(relativePathToMethod, `${type.toLowerCase()}.ts`) }));
+                }), timeout: cdk.Duration.seconds(30), memorySize: this.lambdaMemorySize }, props.functionProps), config.functionProps), { tsBuildOutputFolder: props.tsBuildOutputFolder, sourcePath: props.sourcePath, relativePathToHandler: path.join(relativePathToMethod, `${type.toLowerCase()}.ts`) }));
             this.lambdas[methodName.toLowerCase()] = method;
             let requestModels, requestParameters;
             if (config.model) {
@@ -162,7 +163,6 @@ class CustomAPI extends constructs_1.Construct {
                     }),
                     environment: this.environment,
                     memorySize: this.authorizerMemorySize,
-                    isLocalStack: props.isLocalStack,
                     tsBuildOutputFolder: props.tsBuildOutputFolder,
                     sourcePath: props.sourcePath,
                     relativePathToHandler: `${authorizerName}.ts`
@@ -201,7 +201,7 @@ class CustomAPI extends constructs_1.Construct {
         this.lambdasReady = new Promise((resolve) => {
             this.lambdasReadyResolve = resolve;
         });
-        if (props.isLocalStack) {
+        if (props.environment.ENV === 'local') {
             this.localstackHotReloadBucket = cdk.aws_s3.Bucket.fromBucketName(this, 'HotReloadBucket', 'hot-reload');
         }
         let domainName = undefined;
