@@ -123,7 +123,10 @@ class CustomAPI extends constructs_1.Construct {
         });
         this.addMethod = (type, resource, pathToMethod, config, methodName, props) => __awaiter(this, void 0, void 0, function* () {
             const relativePathToMethod = pathToMethod.substring(props.sourcePath.length + 1); /* +1 to remove leading / */
-            const method = NodejsFunction_1.NodejsFunction.generate(this, `${methodName}Function`, Object.assign(Object.assign(Object.assign({ runtime: lambda.Runtime.NODEJS_18_X, environment: this.environment, logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH, functionName: `${cdk.Stack.of(this).stackName}-${methodName}`, timeout: cdk.Duration.seconds(30), memorySize: this.lambdaMemorySize }, props.functionProps), config.functionProps), { isLocalStack: props.isLocalStack, tsBuildOutputFolder: props.tsBuildOutputFolder, sourcePath: props.sourcePath, relativePathToHandler: path.join(relativePathToMethod, `${type.toLowerCase()}.ts`) }));
+            const method = NodejsFunction_1.NodejsFunction.generate(this, `${methodName}Function`, Object.assign(Object.assign(Object.assign({ runtime: lambda.Runtime.NODEJS_18_X, environment: this.environment, functionName: `${cdk.Stack.of(this).stackName}-${methodName}`, logGroup: new cdk.aws_logs.LogGroup(this, `${methodName}LogGroup`, {
+                    logGroupName: `/aws/lambda/${cdk.Stack.of(this).stackName}-${methodName}`,
+                    retention: cdk.aws_logs.RetentionDays.ONE_YEAR
+                }), timeout: cdk.Duration.seconds(30), memorySize: this.lambdaMemorySize }, props.functionProps), config.functionProps), { isLocalStack: props.isLocalStack, tsBuildOutputFolder: props.tsBuildOutputFolder, sourcePath: props.sourcePath, relativePathToHandler: path.join(relativePathToMethod, `${type.toLowerCase()}.ts`) }));
             this.lambdas[methodName.toLowerCase()] = method;
             let requestModels, requestParameters;
             if (config.model) {
@@ -153,7 +156,10 @@ class CustomAPI extends constructs_1.Construct {
                 const lambdaAuthorizer = NodejsFunction_1.NodejsFunction.generate(this, `${props.apiName}Lambda${authorizerName}`, {
                     runtime: lambda.Runtime.NODEJS_18_X,
                     functionName: `${cdk.Stack.of(this).stackName}-${authorizerName}`,
-                    logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
+                    logGroup: new cdk.aws_logs.LogGroup(this, `${props.apiName}Lambda${authorizerName}LogGroup`, {
+                        logGroupName: `/aws/lambda/${cdk.Stack.of(this).stackName}-${authorizerName}`,
+                        retention: cdk.aws_logs.RetentionDays.ONE_YEAR
+                    }),
                     environment: this.environment,
                     memorySize: this.authorizerMemorySize,
                     isLocalStack: props.isLocalStack,

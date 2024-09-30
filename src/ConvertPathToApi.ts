@@ -276,8 +276,11 @@ export class CustomAPI extends Construct {
     const method = NodejsFunction.generate(this, `${methodName}Function`, {
       runtime: lambda.Runtime.NODEJS_18_X,
       environment: this.environment,
-      logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
       functionName: `${cdk.Stack.of(this).stackName}-${methodName}`,
+      logGroup: new cdk.aws_logs.LogGroup(this, `${methodName}LogGroup`, {
+        logGroupName: `/aws/lambda/${cdk.Stack.of(this).stackName}-${methodName}`,
+        retention: cdk.aws_logs.RetentionDays.ONE_YEAR
+      }),
       timeout: cdk.Duration.seconds(30),
       memorySize: this.lambdaMemorySize,
       ...props.functionProps,
@@ -327,7 +330,10 @@ export class CustomAPI extends Construct {
       const lambdaAuthorizer = NodejsFunction.generate(this, `${props.apiName}Lambda${authorizerName}`, {
         runtime: lambda.Runtime.NODEJS_18_X,
         functionName: `${cdk.Stack.of(this).stackName}-${authorizerName}`,
-        logRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
+        logGroup: new cdk.aws_logs.LogGroup(this, `${props.apiName}Lambda${authorizerName}LogGroup`, {
+          logGroupName: `/aws/lambda/${cdk.Stack.of(this).stackName}-${authorizerName}`,
+          retention: cdk.aws_logs.RetentionDays.ONE_YEAR
+        }),
         environment: this.environment,
         memorySize: this.authorizerMemorySize,
         isLocalStack: props.isLocalStack,
