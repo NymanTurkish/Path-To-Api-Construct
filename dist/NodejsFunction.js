@@ -54,7 +54,7 @@ class NodejsFunction {
             lambdaProps = Object.assign(Object.assign({}, propsRest), { code: cdk.aws_lambda.Code.fromBucket(NodejsFunction.hotReloadBucket, tsBuildOutputFolder), handler: path.join(parsedHandlerPath.dir.substring(parsedHandlerPath.root.length), `${parsedHandlerPath.name}.handler`) });
         }
         else {
-            lambdaProps = Object.assign(Object.assign({}, propsRest), { entry: path.join(sourcePath, parsedHandlerPath.dir, parsedHandlerPath.base) });
+            lambdaProps = Object.assign(Object.assign({}, propsRest), { entry: path.join(sourcePath, parsedHandlerPath.dir, parsedHandlerPath.base), environment });
         }
         const lambda = new cdk.aws_lambda_nodejs.NodejsFunction(scope, id, lambdaProps);
         DatadogInstance_1.DatadogInstance.getInstance(scope, props.environment.ENV).addLambdaFunctions([lambda]);

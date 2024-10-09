@@ -2,6 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -26,6 +27,12 @@ export interface methodConfig {
       authRequired: boolean;
       authorizer?: string;
       model: any;
+      policies?: [
+        {
+          actions: string[];
+          resources: string[];
+        }
+      ]
     };
   };
 };
@@ -63,6 +70,7 @@ export interface IApiProps {
    * @see NodejsFunctionProps.environment
    */
   environment: NodejsFunctionProps['environment'];
+  permissionResourceMapping?: {[key: string]: string};
 };
 
 /**
@@ -93,7 +101,7 @@ async function getConfigFromPath(directory: string, props: IApiProps) {
   if (!fs.existsSync(configPath)) {
     return undefined;
   }
-
+  
   const { config } = await import(configPath);
   return config as apiRoute;
 }
@@ -311,6 +319,26 @@ export class CustomAPI extends Construct {
             )
           }
           break;
+      }
+    }
+
+    /** 
+     * Gets the permissions provided in the methods config file and assigns them to the methods lambda.
+     * It loops through the resources and maps any placeholder names to the resources passed in via the api props
+     */
+    if (config.policies) {
+      for (const policy of config.policies) {
+        const resources: string[] = [];
+        if (props.permissionResourceMapping) {
+          for (const resource of policy.resources) {
+            resources.push(props.permissionResourceMapping[resource] ?? resource);
+          }
+        }
+
+        method.addToRolePolicy(new iam.PolicyStatement({
+          actions: policy.actions,
+          resources: resources
+        }));
       }
     }
 
