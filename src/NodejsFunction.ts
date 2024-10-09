@@ -8,7 +8,7 @@ import { DatadogInstance } from './DatadogInstance';
  * The environment of the lambda function. If set to "local", the expectation is that the code is running on Localstack
  * therefore the tsBuildOutputFolder is required and the code will be loaded from there with hot reloading support.
  */
-export type ENV = 'local' | 'personal' | 'dev' | 'uat' | 'prod' | string;
+export type ENV = 'local' | 'dev' | 'uat' | 'prod' | string;
 
 
 export type NodejsFunctionProps = Exclude<cdk.aws_lambda_nodejs.NodejsFunctionProps, 'code'|'handler'|'entry'|'environment'> & {
