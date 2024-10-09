@@ -89,7 +89,10 @@ Each endpoint will be handled by a lambda function stored in a file with the (lo
 
 ## Permissions
 
-You are responsible for providing the necessary IAM permissions for your Lambdas. This can be accomplished by waiting for the construct to finish creating the Lambdas and then adding the necessary policies to each. For example:
+You are responsible for providing the necessary IAM permissions for your Lambdas. This can be accomplished in two ways:
+
+#### 1. CDK code
+ After waiting for the construct to finish creating the Lambdas you can then add the necessary policies to each. For example:
 
 ```ts
   // supposing you have a dynamo table that you want to grant access to
@@ -104,6 +107,44 @@ You are responsible for providing the necessary IAM permissions for your Lambdas
     // so foo_get is the get method for the foo endpoint
     dynamodb.grantReadWriteData(routes['foo_get']);
   });
+```
+
+#### 2. Method Config File
+ Another way to add permissions to the lambdas it by providing policies within the config file. This happens in two steps:
+ 
+1. In the config file, per method, add an attribute called policies, which will be an array of policies to add to the lambda role. These policies will consit of actions and resources. It follows the standard format for a Policy Statement
+
+```ts
+  methods: {
+    'GET': {
+      model: {
+        requestParameters: {
+          'method.request.querystring.id': false,
+          'method.request.querystring.name': true
+        }
+      },
+      authRequired: true,
+      policies: [
+        {
+          actions: ['dynamodb:PutItem', 'dynamodb:GetItem'],
+          resources: ['DRUG_SIDE_EFFECTS']
+        }
+      ]
+    }
+  }
+```
+2. Add resource mappings to `permissionResourceMapping` in `CustomAPI` props that map the resource name to the actual resouce in the stack.
+
+```ts
+  const apiProps: IApiProps = {
+    apiName: 'ApplicationPortal',
+    apiFolderPath: targetPath,
+    ...
+    permissionResourceMapping: {
+      INTAKE_APPLICATION_TABLE: intakeApplicationTable.tableArn,
+      DRUG_SIDE_EFFECTS: drugSideEffectsTable.tableArn
+    }
+  };
 ```
 
 ## Localstack

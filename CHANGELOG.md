@@ -1,3 +1,7 @@
+### v0.6.1
+- Adds the ability to pass lambda permissions via the config fil
+- Fixed an issue where the environment variables were not being passed to the lambdas
+
 ### v0.6
 - Adds separate NodejsFunction `generate` method for creating Lambda functions with Localstack support
 - Remove legacy `logRetention` in favor of `LogGroup` for Lambda functions
