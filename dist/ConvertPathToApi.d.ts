@@ -8,6 +8,12 @@ export interface methodConfig {
             authRequired: boolean;
             authorizer?: string;
             model: any;
+            policies?: [
+                {
+                    actions: string[];
+                    resources: string[];
+                }
+            ];
         };
     };
 }
@@ -46,6 +52,9 @@ export interface IApiProps {
      * @see NodejsFunctionProps.environment
      */
     environment: NodejsFunctionProps['environment'];
+    permissionResourceMapping?: {
+        [key: string]: string;
+    };
 }
 export declare class CustomAPI extends Construct {
     authorizers: {

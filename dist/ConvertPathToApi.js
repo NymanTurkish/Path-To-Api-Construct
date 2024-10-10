@@ -37,6 +37,7 @@ const cdk = __importStar(require("aws-cdk-lib"));
 const lambda = __importStar(require("aws-cdk-lib/aws-lambda"));
 const route53 = __importStar(require("aws-cdk-lib/aws-route53"));
 const targets = __importStar(require("aws-cdk-lib/aws-route53-targets"));
+const iam = __importStar(require("aws-cdk-lib/aws-iam"));
 const constructs_1 = require("constructs");
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
@@ -123,6 +124,7 @@ class CustomAPI extends constructs_1.Construct {
             ;
         });
         this.addMethod = (type, resource, pathToMethod, config, methodName, props) => __awaiter(this, void 0, void 0, function* () {
+            var _f;
             const relativePathToMethod = pathToMethod.substring(props.sourcePath.length + 1); /* +1 to remove leading / */
             const method = NodejsFunction_1.NodejsFunction.generate(this, `${methodName}Function`, Object.assign(Object.assign(Object.assign({ runtime: lambda.Runtime.NODEJS_18_X, environment: this.environment, functionName: `${cdk.Stack.of(this).stackName}-${methodName}`, logGroup: new cdk.aws_logs.LogGroup(this, `${methodName}LogGroup`, {
                     logGroupName: `/aws/lambda/${cdk.Stack.of(this).stackName}-${methodName}`,
@@ -144,6 +146,24 @@ class CustomAPI extends constructs_1.Construct {
                             })
                         };
                         break;
+                }
+            }
+            /**
+             * Gets the permissions provided in the methods config file and assigns them to the methods lambda.
+             * It loops through the resources and maps any placeholder names to the resources passed in via the api props
+             */
+            if (config.policies) {
+                for (const policy of config.policies) {
+                    const resources = [];
+                    if (props.permissionResourceMapping) {
+                        for (const resource of policy.resources) {
+                            resources.push((_f = props.permissionResourceMapping[resource]) !== null && _f !== void 0 ? _f : resource);
+                        }
+                    }
+                    method.addToRolePolicy(new iam.PolicyStatement({
+                        actions: policy.actions,
+                        resources: resources
+                    }));
                 }
             }
             let authorizer = undefined;

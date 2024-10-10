@@ -65,10 +65,10 @@ export class NodejsFunction {
                 handler: path.join(parsedHandlerPath.dir.substring(parsedHandlerPath.root.length), `${parsedHandlerPath.name}.handler`),
             }
         } else {
-
             lambdaProps = {
                 ...propsRest,
                 entry: path.join(sourcePath, parsedHandlerPath.dir, parsedHandlerPath.base),
+                environment
             }
         }
         
