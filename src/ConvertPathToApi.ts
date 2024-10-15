@@ -180,7 +180,7 @@ export class CustomAPI extends Construct {
           'Content-Type',
           'Origin',
           'User-Agent',
-          'Content-Type',
+          'Content-Encoding',
           'Salesforce-Instance-Url'
         ]
       },

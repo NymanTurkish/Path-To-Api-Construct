@@ -1,3 +1,6 @@
+### v0.6.2
+- Updates supported CORS headers to include `Content-Encoding`
+
 ### v0.6.1
 - Adds the ability to pass lambda permissions via the config fil
 - Fixed an issue where the environment variables were not being passed to the lambdas
