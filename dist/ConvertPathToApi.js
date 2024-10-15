@@ -243,7 +243,7 @@ class CustomAPI extends constructs_1.Construct {
                     'Content-Type',
                     'Origin',
                     'User-Agent',
-                    'Content-Type',
+                    'Content-Encoding',
                     'Salesforce-Instance-Url'
                 ]
             } }, gatewayOptions));
